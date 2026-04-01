@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+release/
+
+# Chrome user data (too large, contains login state)
+user-data/
+
+# DMG and large binaries
+*.dmg
+*.dmg.blockmap
+
+# Test files (可能有大视频)
+test/test-files/
+
+# OS files
+.DS_Store
+*.log
+
+# IDE
+.idea/
+*.swp
