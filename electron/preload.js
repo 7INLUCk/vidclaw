@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   // Seedance 模式任务准备（带素材 @引用）
   prepareTaskForSeedance: (input, materials) => ipcRenderer.invoke('task:prepare-seedance', { input, materials }),
       // 批量任务准备
-      prepareBatchTasks: (input: string) => ipcRenderer.invoke('task:prepare-batch', input),
+      prepareBatchTasks: (input) => ipcRenderer.invoke('task:prepare-batch', input),
 
   // 任务管理（兼容旧接口）
   submitTask: (input) => ipcRenderer.invoke('task:submit', input),
@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('api', {
   // 应用状态
   getStatus: () => ipcRenderer.invoke('app:status'),
   openDownloadDir: () => ipcRenderer.invoke('app:open-download-dir'),
-  openFile: (filePath: string) => ipcRenderer.invoke('app:open-file', filePath),
+  openFile: (filePath) => ipcRenderer.invoke('app:open-file', filePath),
 
   // 事件监听
   onProgress: (callback) => {
@@ -77,10 +77,10 @@ contextBridge.exposeInMainWorld('api', {
   initMode: () => ipcRenderer.invoke('automation:init-mode'),
 
   // 批量任务 API
-  createBatch: (batch: any, tasks: any[]) => ipcRenderer.invoke('batch:create', { batch, tasks }),
+  createBatch: (batch, tasks) => ipcRenderer.invoke('batch:create', { batch, tasks }),
   startBatch: () => ipcRenderer.invoke('batch:start'),
   stopBatch: () => ipcRenderer.invoke('batch:stop'),
   getBatchStatus: () => ipcRenderer.invoke('batch:status'),
-  updateBatchTask: (taskId: string, updates: any) => ipcRenderer.invoke('batch:update-task', { taskId, updates }),
-  deleteBatchTask: (taskId: string) => ipcRenderer.invoke('batch:delete-task', { taskId }),
+  updateBatchTask: (taskId, updates) => ipcRenderer.invoke('batch:update-task', { taskId, updates }),
+  deleteBatchTask: (taskId) => ipcRenderer.invoke('batch:delete-task', { taskId }),
 });

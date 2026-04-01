@@ -1309,10 +1309,20 @@ class AutomationService {
     this._log(`[模式切换] 下拉检测结果: ${dropdown1 ? '✅ 已弹出' : '⚠️ 未检测到（继续尝试）'}`);
     await randomDelay(1000, 1500);
 
+    // ===== 关键修复：等待目标选项真正渲染完成 =====
+    this._log('[模式切换] 等待「视频生成」选项出现...');
+    const optionVisible = await this.waitForVisible('视频生成', { timeout: 5000 });
+    if (!optionVisible) {
+      this._log('[模式切换] ⚠️ 「视频生成」选项未出现，可能下拉未正确弹出');
+    } else {
+      this._log('[模式切换] ✅ 「视频生成」选项已出现');
+    }
+    await randomDelay(300, 600);
+
     // ===== Step 3: 选择 视频生成 =====
     this._log('[模式切换] Step 3: 选择 视频生成');
     try {
-      await this.clickDropdownOption('视频生成', { timeout: 5000 });
+      await this.clickDropdownOption('视频生成');
       this._log('[模式切换] ✅ 视频生成 已选择');
     } catch (e) {
       this._log(`[模式切换] Step 3 失败: ${e.message}`);
@@ -1336,10 +1346,20 @@ class AutomationService {
     this._log(`[模式切换] 下拉检测结果: ${dropdown2 ? '✅ 已弹出' : '⚠️ 未检测到（继续尝试）'}`);
     await randomDelay(1000, 1500);
 
+    // ===== 关键修复：等待目标选项真正渲染完成 =====
+    this._log('[模式切换] 等待「全能参考」选项出现...');
+    const optionVisible2 = await this.waitForVisible('全能参考', { timeout: 5000 });
+    if (!optionVisible2) {
+      this._log('[模式切换] ⚠️ 「全能参考」选项未出现，可能下拉未正确弹出');
+    } else {
+      this._log('[模式切换] ✅ 「全能参考」选项已出现');
+    }
+    await randomDelay(300, 600);
+
     // ===== Step 5: 选择 全能参考 =====
     this._log('[模式切换] Step 5: 选择 全能参考');
     try {
-      await this.clickDropdownOption('全能参考', { timeout: 5000 });
+      await this.clickDropdownOption('全能参考');
       this._log('[模式切换] ✅ 全能参考 已选择');
     } catch (e) {
       this._log(`[模式切换] Step 5 失败: ${e.message}`);

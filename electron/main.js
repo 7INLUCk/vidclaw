@@ -7,6 +7,12 @@ const { AutomationService } = require('./services/automation');
 const { BatchTaskManager } = require('./services/batch-task-manager');
 const { AIService } = require('./services/ai');
 
+// 🔴 禁用 GPU 加速（解决 macOS 黑屏问题）
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+
 let mainWindow = null;
 let browserManager = null;
 let automationService = null;
@@ -14,6 +20,58 @@ let batchTaskManager = null;
 let aiService = null;
 
 const isDev = !app.isPackaged;
+
+// ===== 热重载配置（开发模式下自动重载主进程代码）=====
+if (isDev) {
+  try {
+    // 关键：热重载前先同步源码到 dist/electron/
+    const syncToDist = () => {
+      const srcDir = path.join(__dirname, '..', 'electron');
+      const distDir = path.join(__dirname, '..', 'dist', 'electron');
+      
+      // 递归复制目录
+      const copyDir = (src, dest) => {
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+          const srcPath = path.join(src, entry.name);
+          const destPath = path.join(dest, entry.name);
+          if (entry.isDirectory()) {
+            copyDir(srcPath, destPath);
+          } else {
+            fs.copyFileSync(srcPath, destPath);
+          }
+        }
+      };
+      
+      try {
+        copyDir(srcDir, distDir);
+        console.log('[热重载] ✅ 已同步 electron/ → dist/electron/');
+      } catch (e) {
+        console.warn('[热重载] ⚠️ 同步失败:', e.message);
+      }
+    };
+    
+    // 启动时先同步一次
+    syncToDist();
+    
+    require('electron-reload')(
+      [
+        path.join(__dirname, 'main.js'),
+        path.join(__dirname, 'services'),
+        path.join(__dirname, '../dist/renderer'),
+      ],
+      {
+        electron: require.resolve('electron'),
+        hardResetMethod: 'exit',
+        awaitWriteFinish: true,
+      }
+    );
+    console.log('[热重载] ✅ 已启用主进程热重载');
+  } catch (e) {
+    console.warn('[热重载] ⚠️ 加载失败:', e.message);
+  }
+}
 
 // ===== 用户设置持久化 =====
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
@@ -42,18 +100,21 @@ function saveSettings(settings) {
 
 let settings = loadSettings();
 
-// ===== 单实例锁定 =====
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  console.log('已有实例在运行，退出当前实例');
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+// ===== 单实例锁定（开发模式下禁用，避免热重载冲突）=====
+let gotTheLock = true; // 默认允许启动
+if (!isDev) {
+  gotTheLock = app.requestSingleInstanceLock();
+  if (!gotTheLock) {
+    console.log('已有实例在运行，退出当前实例');
+    app.quit();
+  } else {
+    app.on('second-instance', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    });
+  }
 }
 
 // ===== Vite 就绪检测 =====
@@ -109,10 +170,44 @@ async function createWindow() {
       `);
     }
   } else {
+    // 🔴 生产模式：使用 app.asar 内的路径
     const rendererPath = path.join(__dirname, '../dist/renderer/index.html');
     console.log('加载渲染器:', rendererPath);
-    await mainWindow.loadFile(rendererPath);
+    console.log('文件是否存在:', fs.existsSync(rendererPath));
+    
+    try {
+      await mainWindow.loadFile(rendererPath);
+      console.log('渲染器加载成功');
+    } catch (err) {
+      console.error('渲染器加载失败:', err);
+      // 显示错误信息
+      mainWindow.loadURL(`data:text/html,
+        <html><body style="background:#030712;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">
+          <div style="text-align:center">
+            <h2>❌ 加载失败</h2>
+            <p style="color:#888">${err.message}</p>
+            <p style="color:#666">路径: ${rendererPath}</p>
+          </div>
+        </body></html>
+      `);
+    }
   }
+
+  // 🔴 开发工具（生产模式也开启，方便调试）
+  mainWindow.webContents.openDevTools();
+  
+  // 🔴 捕获渲染进程错误
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('渲染进程加载失败:', errorCode, errorDescription);
+  });
+  
+  mainWindow.webContents.on('console-message', (event, level, message) => {
+    console.log('[渲染进程]', message);
+  });
+  
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('✅ 页面加载完成');
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

@@ -571,6 +571,64 @@ export function ChatPanel() {
     if (!input.trim() || isSubmitting) return;
     if (guidedStep === 'task-confirming') return;
 
+    // ===== 批量任务模式 =====
+    if (guidedStep === 'batch-collecting') {
+      const userMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: input.trim(),
+        timestamp: new Date(),
+      };
+      addMessage(userMsg);
+      setInput('');
+      setSubmitting(true);
+      setStatusText('🧠 AI 正在规划批量任务...');
+
+      try {
+        const result = await window.api.prepareBatchTasks(userMsg.content);
+        console.log('[批量任务] AI 返回:', result);
+
+        if (!result.success || !result.tasks || result.tasks.length === 0) {
+          addMessage({
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `❌ ${result.error || '批量任务生成失败，请重试'}`,
+            timestamp: new Date(),
+            type: 'error',
+          });
+          setGuidedStep('logged-in-ready');
+        } else {
+          setGuidedStep('task-confirming');
+          addMessage({
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            type: 'batch-confirm',
+            data: {
+              batchName: result.batchName || '批量任务',
+              description: result.description || '',
+              tasks: result.tasks,
+            },
+          });
+        }
+      } catch (err) {
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `❌ 出错了: ${err}`,
+          timestamp: new Date(),
+          type: 'error',
+        });
+        setGuidedStep('logged-in-ready');
+      } finally {
+        setSubmitting(false);
+        setStatusText('');
+      }
+      return;
+    }
+
+    // ===== 单个任务模式 =====
     // 构建素材信息（用于 Seedance 模式改写）
     const materials = {
       images: [] as Array<{ type: string; name: string; path: string }>,
@@ -851,8 +909,8 @@ export function ChatPanel() {
     }
   }
 
-  const canInput = guidedStep === 'logged-in-ready' || guidedStep === 'task-done';
-  const showInputArea = ['logged-in-ready', 'task-drafting', 'task-confirming', 'task-executing', 'task-done'].includes(guidedStep);
+  const canInput = guidedStep === 'logged-in-ready' || guidedStep === 'task-done' || guidedStep === 'batch-collecting';
+  const showInputArea = ['logged-in-ready', 'task-drafting', 'task-confirming', 'task-executing', 'task-done', 'batch-collecting'].includes(guidedStep);
 
   return (
     <div className="flex flex-col h-full bg-surface-0">
