@@ -85,8 +85,8 @@ function loadSettings() {
   return {
     downloadDir: path.join(app.getPath('downloads'), '即梦'),
     autoDownload: false,
-    apiKey: process.env.OPENROUTER_API_KEY || '',
-    model: 'xiaomi/mimo-v2-pro',
+    apiKey: 'sk-sp-7902af5b0f614c73a7fc8103f1b36ae3', // 阿里云百炼 GLM-5
+    model: 'glm-5',
   };
 }
 
@@ -224,9 +224,9 @@ function sendToRenderer(channel, data) {
 // ===== 确保 AI 服务已初始化 =====
 function ensureAIService() {
   if (!aiService) {
-    const apiKey = settings.apiKey || process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error('未配置 OpenRouter API Key，请在设置中配置');
-    aiService = new AIService(apiKey, settings.model);
+    const apiKey = settings.apiKey || 'sk-sp-7902af5b0f614c73a7fc8103f1b36ae3';
+    const model = settings.model || 'glm-5';
+    aiService = new AIService(apiKey, model);
   }
   return aiService;
 }
