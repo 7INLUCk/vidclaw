@@ -85,7 +85,7 @@ function loadSettings() {
   return {
     downloadDir: path.join(app.getPath('downloads'), '即梦'),
     autoDownload: false,
-    apiKey: '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', // OpenRouter
+    apiKey: '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', // OpenRouter（新 key）
     model: 'xiaomi/mimo-v2-pro',
   };
 }
@@ -224,7 +224,7 @@ function sendToRenderer(channel, data) {
 // ===== 确保 AI 服务已初始化 =====
 function ensureAIService() {
   if (!aiService) {
-    const apiKey = settings.apiKey || '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';
+    const apiKey = settings.apiKey || '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';
     const model = settings.model || 'xiaomi/mimo-v2-pro';
     aiService = new AIService(apiKey, model);
   }

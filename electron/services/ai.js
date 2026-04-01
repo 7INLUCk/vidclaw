@@ -110,8 +110,8 @@ const SEEDANCE_SYSTEM_PROMPT = `你是即梦 Seedance 2.0「全能参考」模�
 
 class AIService {
   constructor(apiKey, model) {
-    // 使用 OpenRouter MiMo V2 Pro（已验证可用）
-    this.apiKey = apiKey || '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';
+    // 使用 OpenRouter MiMo V2 Pro（新 key，2026-04-01 更新）
+    this.apiKey = apiKey || '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';
     this.model = model || 'xiaomi/mimo-v2-pro';
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
   }
