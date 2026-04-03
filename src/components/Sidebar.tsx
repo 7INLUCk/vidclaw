@@ -1,4 +1,4 @@
-import { MessageSquare, ListTodo, Settings, Download, PawPrint } from 'lucide-react';
+import { MessageSquare, ListTodo, Settings, Download, Clock, PawPrint } from 'lucide-react';
 import { useStore } from '../store';
 
 export function Sidebar() {
@@ -11,6 +11,7 @@ export function Sidebar() {
   const navItems = [
     { id: 'chat' as const, icon: MessageSquare, label: '对话', badge: isSubmitting ? '...' : null },
     { id: 'results' as const, icon: ListTodo, label: '任务', badge: activeTaskCount > 0 ? String(activeTaskCount) : null },
+    { id: 'history' as const, icon: Clock, label: '作品', badge: null },
     { id: 'settings' as const, icon: Settings, label: '设置', badge: null },
   ];
 

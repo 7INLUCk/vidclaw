@@ -378,7 +378,7 @@ function registerIpcHandlers() {
     }
   });
 
-  // ---- 新：两步任务提交 —— Step 2: 执行（填写+提交） ----
+  // ---- 新：两步任务提交 —— Step 2: 执行（填写+提交，含重试） ----
   ipcMain.handle('task:execute', async (_event, task) => {
     console.log('[执行任务] 任务:', JSON.stringify(task).slice(0, 200));
 
@@ -392,17 +392,48 @@ function registerIpcHandlers() {
         return { success: false, error: '自动化服务初始化失败' };
       }
 
-      const result = await automation.runTask({
-        prompt: task.prompt,
-        files: task.files || [],
-      });
+      // 带重试的任务执行
+      const maxRetries = 3;
+      const retryDelays = [10000, 30000, 60000]; // 10s, 30s, 60s
+      let lastError;
 
-      return {
-        success: true,
-        message: '任务已提交',
-        prompt: task.prompt,
-        type: task.type,
-      };
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await automation.runTask({
+            prompt: task.prompt,
+            files: task.files || [],
+          });
+
+          return {
+            success: true,
+            message: attempt > 0 ? `任务已提交（第${attempt + 1}次尝试成功）` : '任务已提交',
+            prompt: task.prompt,
+            type: task.type,
+          };
+        } catch (err) {
+          lastError = err;
+          const errMsg = err.message || '';
+
+          // 判断是否可重试：网络超时/500错误才重试
+          const isRetryable = /timeout|ETIMEDOUT|ECONNRESET|5\d{2}|network|socket/i.test(errMsg);
+
+          if (!isRetryable || attempt >= maxRetries) {
+            break;
+          }
+
+          console.log(`[执行任务] 第${attempt + 1}次失败，${retryDelays[attempt] / 1000}秒后重试: ${errMsg}`);
+          sendToRenderer('task:progress', {
+            event: 'progress',
+            data: {
+              progressType: 'generating',
+              message: `⚠️ 遇到错误，${retryDelays[attempt] / 1000}秒后自动重试（${attempt + 1}/${maxRetries}）`,
+            },
+          });
+          await new Promise(r => setTimeout(r, retryDelays[attempt]));
+        }
+      }
+
+      return { success: false, error: lastError?.message || '任务执行失败' };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -623,7 +654,7 @@ function registerIpcHandlers() {
     }
   });
 
-  // ---- 重启浏览器（重新登录） ----
+  // ---- 重启浏览器（重新登录，强制可见窗口） ----
   ipcMain.handle('browser:relaunch', async () => {
     try {
       if (automationService) {
@@ -636,7 +667,7 @@ function registerIpcHandlers() {
       }
       const userDataPath = app.getPath('userData');
       browserManager = new BrowserManager(userDataPath);
-      await browserManager.launch();
+      await browserManager.launch(true); // forceVisible = true，让用户扫码
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };

@@ -101,6 +101,13 @@ function ActiveTaskCard({ task, onDragStart, onDragOver, onDrop, draggable }: {
               )}
             </div>
           )}
+
+          {/* Queue estimation */}
+          {isQueued && task.queuePosition != null && task.queuePosition > 5000 && (
+            <p className="text-[10px] text-text-disabled">
+              预计等待: 约 {Math.ceil(task.queuePosition / 100)} 分钟
+            </p>
+          )}
         </div>
       </div>
 
@@ -170,7 +177,7 @@ function CompletedTaskCard({ task, highlighted }: { task: TaskRecord; highlighte
         <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
           {task.resultUrl && (
             <button
-              onClick={() => window.open(task.resultUrl, '_blank')}
+              onClick={() => useStore.getState().setPreviewUrl(task.resultUrl!)}
               className="p-1.5 rounded-md bg-black/60 backdrop-blur-sm hover:bg-brand text-white transition-colors"
               title="预览"
             >

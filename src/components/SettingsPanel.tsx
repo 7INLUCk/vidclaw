@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { FolderOpen, Key, RefreshCw, Check, LogOut, ExternalLink } from 'lucide-react';
+import { FolderOpen, Key, RefreshCw, Check, LogOut, ExternalLink, BarChart3, TrendingUp, CheckCircle, XCircle, Calendar } from 'lucide-react';
 import { useStore } from '../store';
 
 export function SettingsPanel() {
-  const { settings, setSettings, addMessage } = useStore();
+  const { settings, setSettings, addMessage, usage } = useStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -186,6 +186,37 @@ export function SettingsPanel() {
                   MiMo V2 Pro <ExternalLink size={10} />
                 </a>
               </p>
+            </div>
+          </section>
+
+          <hr className="border-border-subtle" />
+
+          {/* Usage Statistics */}
+          <section>
+            <label className="flex items-center gap-2 text-sm font-medium text-text-primary mb-3">
+              <BarChart3 size={14} className="text-brand" />
+              用量统计
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-surface-2 rounded-xl p-3 border border-border-subtle text-center">
+                <p className="text-lg font-semibold text-text-primary font-mono">{usage.totalTasks}</p>
+                <p className="text-[10px] text-text-muted mt-0.5">总任务</p>
+              </div>
+              <div className="bg-surface-2 rounded-xl p-3 border border-border-subtle text-center">
+                <p className="text-lg font-semibold font-mono" style={{ color: 'oklch(0.7 0.15 145)' }}>{usage.completedTasks}</p>
+                <p className="text-[10px] text-text-muted mt-0.5">已完成</p>
+              </div>
+              <div className="bg-surface-2 rounded-xl p-3 border border-border-subtle text-center">
+                <p className="text-lg font-semibold font-mono" style={{ color: 'oklch(0.6 0.2 25)' }}>{usage.failedTasks}</p>
+                <p className="text-[10px] text-text-muted mt-0.5">失败</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2 text-[10px] text-text-disabled">
+              <Calendar size={10} />
+              <span>今日: {usage.todayTasks} 个任务</span>
+              <span>·</span>
+              <TrendingUp size={10} />
+              <span>成功率: {usage.totalTasks > 0 ? Math.round((usage.completedTasks / usage.totalTasks) * 100) : 0}%</span>
             </div>
           </section>
 

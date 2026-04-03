@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type BatchTaskItem } from '../store';
+import { MaterialLibrary } from './MaterialLibrary';
+import { PromptTemplates } from './PromptTemplates';
 
 // ── Mode Select Card (选择单个/批量) ──
 function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
@@ -634,6 +636,7 @@ export function ChatPanel() {
   const [showParams, setShowParams] = useState(false);
   const [useStructuredFlow] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('vidclaw_onboarded'));
+  const [showMaterialLib, setShowMaterialLib] = useState(false);
 
   // Auto-scroll
   useEffect(() => {
@@ -1056,6 +1059,24 @@ export function ChatPanel() {
         const item = data.data;
         if (item?.url) {
           useStore.getState().addResult(item);
+          // Save to history
+          useStore.getState().addHistory({
+            id: `hist_${Date.now()}_${item.id?.slice(-6) || Math.random().toString(36).slice(2, 8)}`,
+            prompt: item.prompt || '',
+            model: '',
+            duration: 0,
+            resultUrl: item.url,
+            thumbnailUrl: item.thumbUrl,
+            createdAt: Date.now(),
+            status: 'completed',
+          });
+          // Update usage
+          const usage = useStore.getState().usage;
+          useStore.getState().updateUsage({
+            totalTasks: usage.totalTasks + 1,
+            completedTasks: usage.completedTasks + 1,
+            todayTasks: usage.todayTasks + 1,
+          });
           const icon = item.generateType === 'video' ? '🎬' : '🖼️';
           addMessage({
             id: Date.now().toString() + '_done',
@@ -1104,7 +1125,26 @@ export function ChatPanel() {
 
   async function handleSelectFiles() {
     const { files } = await window.api.selectFiles();
-    if (files?.length) setSelectedFiles((prev) => [...prev, ...files]);
+    if (files?.length) {
+      setSelectedFiles((prev) => [...prev, ...files]);
+      // Save to material library
+      const { addMaterial } = useStore.getState();
+      files.forEach((f: string) => {
+        const filename = f.split('/').pop() || f;
+        const isVideo = /\.(mp4|mov|avi|webm)$/i.test(f);
+        addMaterial({
+          id: `mat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          path: f,
+          type: isVideo ? 'video' : 'image',
+          filename,
+          createdAt: Date.now(),
+        });
+      });
+    }
+  }
+
+  function handleMaterialLibrarySelect(paths: string[]) {
+    setSelectedFiles((prev) => [...prev, ...paths]);
   }
 
   function removeFile(index: number) {
@@ -1137,6 +1177,10 @@ export function ChatPanel() {
       e.preventDefault();
       handleSend();
     }
+    if (e.key === 'Escape') {
+      if (showMaterialLib) setShowMaterialLib(false);
+      else if (showParams) setShowParams(false);
+    }
   }
 
   function handleDismissOnboarding() {
@@ -1154,6 +1198,13 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full bg-surface-0 relative">
+      {/* Material Library popup */}
+      <MaterialLibrary
+        visible={showMaterialLib}
+        onClose={() => setShowMaterialLib(false)}
+        onSelect={handleMaterialLibrarySelect}
+      />
+
       {/* Onboarding Overlay (问题6) */}
       {showOnboarding && <OnboardingOverlay onDismiss={handleDismissOnboarding} isLoggedIn={!!useStore.getState().isLoggedIn} />}
       {/* Header */}
@@ -1278,6 +1329,14 @@ export function ChatPanel() {
               <Upload size={18} />
             </button>
             <button
+              onClick={() => setShowMaterialLib(true)}
+              disabled={!canInput}
+              className="p-2.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text-primary transition-all duration-150 flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed"
+              title="素材库"
+            >
+              <FolderOpen size={18} />
+            </button>
+            <button
               onClick={() => setShowParams(!showParams)}
               disabled={!canInput}
               className={`p-2.5 rounded-lg transition-all duration-150 flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed flex items-center gap-0.5 ${
@@ -1315,6 +1374,11 @@ export function ChatPanel() {
             支持描述视频需求 · 上传参考图/视频 · ⚙️ 结构化模式（带素材时自动启用）
           </p>
         </div>
+      )}
+
+      {/* Prompt Templates */}
+      {showInputArea && (
+        <PromptTemplates onSelect={(prompt) => { setInput(prompt); textareaRef.current?.focus(); }} />
       )}
     </div>
   );
@@ -1478,13 +1542,24 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
 
         {/* Result download button */}
         {msg.type === 'result' && msg.data && (
-          <button
-            onClick={onDownload}
-            className="mt-2.5 flex items-center gap-1.5 text-xs text-accent-light hover:text-accent transition-colors font-medium"
-          >
-            <Download size={13} />
-            下载到本地
-          </button>
+          <div className="flex items-center gap-2 mt-2.5">
+            {msg.data.url && (
+              <button
+                onClick={() => useStore.getState().setPreviewUrl(msg.data.url)}
+                className="flex items-center gap-1.5 text-xs text-accent-light hover:text-accent transition-colors font-medium"
+              >
+                <Play size={13} />
+                预览
+              </button>
+            )}
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-1.5 text-xs text-accent-light hover:text-accent transition-colors font-medium"
+            >
+              <Download size={13} />
+              下载到本地
+            </button>
+          </div>
         )}
 
         <p className={`text-[10px] mt-1.5 ${isUser ? 'text-white/40' : 'text-text-disabled'}`}>

@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { ChatPanel } from './components/ChatPanel';
 import { TaskPanel } from './components/TaskPanel';
+import { HistoryPanel } from './components/HistoryPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { BatchTaskPanel } from './components/BatchTaskPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { VideoModal } from './components/VideoModal';
 import { Maximize2, Minimize2, PawPrint } from 'lucide-react';
 
 declare global {
@@ -19,9 +22,7 @@ declare global {
       submitTaskWithFiles: (input: string, filePaths: string[]) => Promise<{ success: boolean; message?: string; error?: string }>;
       prepareTask: (input: string) => Promise<{ success: boolean; task?: any; error?: string }>;
       executeTask: (task: any) => Promise<{ success: boolean; message?: string; error?: string }>;
-      // Seedance 模式任务准备（带素材 @引用）
       prepareTaskForSeedance: (input: string, materials: { images?: any[]; videos?: any[]; audios?: any[] }) => Promise<{ success: boolean; task?: any; materials?: any; error?: string }>;
-      // 批量任务准备
       prepareBatchTasks: (input: string) => Promise<{ success: boolean; batchName?: string; description?: string; tasks?: any[]; questions?: string[]; error?: string }>;
       downloadTask: (item: any) => Promise<{ success: boolean; filepath?: string; error?: string }>;
       downloadAll: () => Promise<{ results: any[] }>;
@@ -41,7 +42,6 @@ declare global {
       onLoginRequired: (callback: () => void) => () => void;
       onLoginDetected: (callback: () => void) => () => void;
       onNotificationClick: (callback: (data: { taskId: string }) => void) => () => void;
-      // Phase 1-3: 结构化自动化 API
       navigateToGenerate: () => Promise<{ success: boolean; error?: string }>;
       switchToSeedanceMode: () => Promise<{ success: boolean; mode?: string; error?: string }>;
       selectModel: (model: string) => Promise<{ success: boolean; model?: string; label?: string; error?: string }>;
@@ -52,15 +52,12 @@ declare global {
       runStructuredTask: (params: { prompt: string; materials?: any[]; metaList?: any[]; model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; taskId?: string; uploadResults?: any[]; message?: string; error?: string }>;
       getModels: () => Promise<{ models: Record<string, { key: string; label: string; benefit: string }>; aspectRatios: string[] }>;
       initMode: () => Promise<{ success: boolean; error?: string }>;
-
-      // 批量任务 API
       createBatch: (batch: any, tasks: any[]) => Promise<{ success: boolean; batchId?: string; totalTasks?: number; error?: string }>;
       startBatch: () => Promise<{ success: boolean; error?: string }>;
       stopBatch: () => Promise<{ success: boolean; error?: string }>;
       getBatchStatus: () => Promise<{ success: boolean; batch?: any; tasks?: any[]; statusCounts?: any; running?: boolean; error?: string }>;
       updateBatchTask: (taskId: string, updates: any) => Promise<{ success: boolean; task?: any; error?: string }>;
       deleteBatchTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
-      // 通知
       sendTaskNotify: (task: { id: string; prompt: string }) => Promise<void>;
     };
   }
@@ -70,18 +67,30 @@ export default function App() {
   const {
     appState,
     setAppState,
-    setSettings, activePanel,
-    taskMode, batchTasks,
+    setSettings, activePanel, setActivePanel,
+    taskMode, batchTasks, previewUrl, setPreviewUrl,
   } = useStore();
 
-  // 批量任务面板显示状态
   const [showBatchPanel, setShowBatchPanel] = useState(true);
 
   useEffect(() => {
     init();
   }, []);
 
-  // 监听后端事件
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+, → open settings
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setActivePanel('settings');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setActivePanel]);
+
+  // Listen for backend events
   useEffect(() => {
     const removeLogin = window.api.onLoginRequired(() => {
       useStore.getState().setGuidedStep('welcome');
@@ -100,7 +109,6 @@ export default function App() {
       });
     });
 
-    // 监听通知点击 → 切换到任务面板并高亮任务
     const removeNotificationClick = window.api.onNotificationClick?.(({ taskId }) => {
       const store = useStore.getState();
       store.setActivePanel('results');
@@ -118,8 +126,6 @@ export default function App() {
     try {
       const savedSettings = await window.api.getSettings();
       if (savedSettings) setSettings(savedSettings);
-
-      // 任务数据从 localStorage 自动加载（store.ts 中处理）
       setAppState('ready');
     } catch (err) {
       console.error('初始化失败:', err);
@@ -145,37 +151,42 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-surface-0 text-white">
-      {/* 左侧边栏 */}
-      <Sidebar />
+    <ErrorBoundary>
+      <div className="flex h-screen bg-surface-0 text-white">
+        {/* Left sidebar */}
+        <Sidebar />
 
-      {/* 主内容区 */}
-      <main className="flex-1 flex min-w-0">
-        {/* 对话/任务/设置面板 */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {activePanel === 'chat' && <ChatPanel />}
-          {activePanel === 'results' && <TaskPanel />}
-          {activePanel === 'settings' && <SettingsPanel />}
-        </div>
-
-        {/* 批量任务面板（右侧） */}
-        {taskMode === 'batch' && batchTasks.length > 0 && showBatchPanel && (
-          <div className="w-80 border-l border-border shrink-0">
-            <BatchTaskPanel />
+        {/* Main content */}
+        <main className="flex-1 flex min-w-0">
+          <div className="flex-1 flex flex-col min-w-0">
+            {activePanel === 'chat' && <ChatPanel />}
+            {activePanel === 'results' && <TaskPanel />}
+            {activePanel === 'history' && <HistoryPanel />}
+            {activePanel === 'settings' && <SettingsPanel />}
           </div>
-        )}
-      </main>
 
-      {/* 批量任务面板切换按钮 */}
-      {taskMode === 'batch' && batchTasks.length > 0 && (
-        <button
-          onClick={() => setShowBatchPanel(!showBatchPanel)}
-          className="fixed bottom-4 right-4 p-2 bg-brand text-white rounded-full shadow-lg hover:shadow-xl transition-all"
-          title={showBatchPanel ? '隐藏任务面板' : '显示任务面板'}
-        >
-          {showBatchPanel ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-        </button>
-      )}
-    </div>
+          {/* Batch task panel (right) */}
+          {taskMode === 'batch' && batchTasks.length > 0 && showBatchPanel && (
+            <div className="w-80 border-l border-border shrink-0">
+              <BatchTaskPanel />
+            </div>
+          )}
+        </main>
+
+        {/* Batch toggle button */}
+        {taskMode === 'batch' && batchTasks.length > 0 && (
+          <button
+            onClick={() => setShowBatchPanel(!showBatchPanel)}
+            className="fixed bottom-4 right-4 p-2 bg-brand text-white rounded-full shadow-lg hover:shadow-xl transition-all"
+            title={showBatchPanel ? '隐藏任务面板' : '显示任务面板'}
+          >
+            {showBatchPanel ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+        )}
+
+        {/* Video preview modal */}
+        <VideoModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
+      </div>
+    </ErrorBoundary>
   );
 }

@@ -22,14 +22,36 @@ class BrowserManager {
     }
   }
 
-  async launch() {
+  // 检查是否已有登录态（storage-state.json 或 Cookie 存在）
+  hasLoginState() {
+    const statePath = path.join(this.userDataDir, 'storage-state.json');
+    if (fs.existsSync(statePath)) {
+      try {
+        const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        if (state.cookies && state.cookies.length > 0) {
+          return true;
+        }
+      } catch {}
+    }
+    // 检查 Chrome profile 的 Cookie 数据库
+    const cookieDb = path.join(this.userDataDir, 'Default', 'Cookies');
+    if (fs.existsSync(cookieDb)) {
+      return true;
+    }
+    return false;
+  }
+
+  async launch(forceVisible = false) {
     if (this.context || this.launching) {
       console.log('浏览器已启动或正在启动，跳过');
       return;
     }
     this.launching = true;
 
-    console.log('启动浏览器，userDataDir:', this.userDataDir);
+    // 决定 headless 模式：有登录态 + 未强制可见 → headless
+    const hasLogin = this.hasLoginState();
+    const useHeadless = hasLogin && !forceVisible;
+    console.log(`启动浏览器, userDataDir: ${this.userDataDir}, headless: ${useHeadless}, hasLogin: ${hasLogin}`);
 
     // ===== Step 0: 杀掉残留的 Chrome 进程（防止 SingletonLock 冲突）=====
     try {
@@ -86,9 +108,9 @@ class BrowserManager {
     }
 
     const launchOptions = {
-      headless: false,        // 浏览器必须对用户可见
+      headless: useHeadless,        // 有登录态时隐身运行
       channel: 'chrome',
-      slowMo: 50,             // 放慢操作速度，让用户能看到过程
+      slowMo: useHeadless ? 0 : 50, // headless 时不需要放慢
       args: [
         '--disable-blink-features=AutomationControlled',
         '--no-sandbox',
