@@ -136,7 +136,7 @@ class AIService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://jimeng-desktop.local',
+          'HTTP-Referer': 'https://vidclaw.local',
           'X-Title': 'Jimeng Desktop Assistant',
         },
       };
@@ -220,7 +220,7 @@ class AIService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://jimeng-desktop.local',
+          'HTTP-Referer': 'https://vidclaw.local',
           'X-Title': 'Jimeng Desktop Assistant',
         },
       };
@@ -339,7 +339,7 @@ class AIService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://jimeng-desktop.local',
+          'HTTP-Referer': 'https://vidclaw.local',
           'X-Title': 'Jimeng Desktop Assistant',
         },
       };

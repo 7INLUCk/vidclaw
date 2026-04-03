@@ -1,5 +1,5 @@
 {
-  "name": "jimeng-desktop",
+  "name": "vidclaw",
   "version": "0.1.0",
   "description": "VidClaw - 本地桌面版",
   "main": "electron/main.js",
@@ -12,7 +12,7 @@
     "start": "electron ."
   },
   "keywords": [
-    "jimeng",
+    "vidclaw",
     "ai",
     "video",
     "electron"
@@ -49,7 +49,7 @@
     "zustand": "^5.0.12"
   },
   "build": {
-    "appId": "com.jimeng.assistant",
+    "appId": "com.vidclaw.app",
     "productName": "VidClaw",
     "directories": {
       "output": "release"
