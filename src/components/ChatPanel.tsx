@@ -918,7 +918,7 @@ export function ChatPanel() {
       <header className="flex items-center justify-between px-6 py-3 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-sm font-semibold text-text-primary">即梦 AI 视频助手</h1>
+            <h1 className="text-sm font-semibold text-text-primary">VidClaw</h1>
             <p className="text-xs text-text-muted flex items-center gap-1.5">
               {isSubmitting && (
                 <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />

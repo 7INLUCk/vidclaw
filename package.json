@@ -1,7 +1,7 @@
 {
   "name": "jimeng-desktop",
   "version": "0.1.0",
-  "description": "即梦 AI 视频助手 - 本地桌面版",
+  "description": "VidClaw - 本地桌面版",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -50,7 +50,7 @@
   },
   "build": {
     "appId": "com.jimeng.assistant",
-    "productName": "即梦AI视频助手",
+    "productName": "VidClaw",
     "directories": {
       "output": "release"
     },

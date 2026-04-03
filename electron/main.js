@@ -145,7 +145,7 @@ async function createWindow() {
     height: 850,
     minWidth: 960,
     minHeight: 640,
-    title: '即梦 AI 视频助手',
+    title: 'VidClaw',
     backgroundColor: '#030712',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
