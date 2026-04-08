@@ -9,7 +9,9 @@
     "build:electron": "mkdir -p dist/electron && cp -r electron/* dist/electron/",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
     "electron:build": "npm run build && npm run build:electron && electron-builder",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "vitest",
+    "test:unit": "vitest run"
   },
   "keywords": [
     "vidclaw",
@@ -27,13 +29,16 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.2",
     "concurrently": "^9.2.1",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1",
+    "jsdom": "^29.0.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
     "vite": "^8.0.3",
+    "vitest": "^4.1.2",
     "wait-on": "^8.0.5"
   },
   "dependencies": {
@@ -41,9 +46,6 @@
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-toast": "^1.2.15",
     "lucide-react": "^1.7.0",
-    "playwright": "^1.58.2",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "zustand": "^5.0.12"
@@ -57,11 +59,6 @@
     "files": [
       "electron/**/*",
       "dist/renderer/**/*",
-      "node_modules/playwright/**/*",
-      "node_modules/playwright-core/**/*",
-      "node_modules/playwright-extra/**/*",
-      "node_modules/puppeteer-extra-plugin-stealth/**/*",
-      "node_modules/puppeteer-extra-plugin*/**/*",
       "package.json"
     ],
     "mac": {

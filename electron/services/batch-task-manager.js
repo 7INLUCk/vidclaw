@@ -1,15 +1,18 @@
 /**
- * 批量任务管理器
+ * 批量任务管理器（CLI 版本）
  * 
  * 功能：
  * 1. 管理批量任务队列
  * 2. 自动补位（即梦最多5个并发）
- * 3. 状态监控
+ * 3. 状态监控（通过 CLI query_result）
  * 4. 自动下载和命名
  */
 
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 
 // 批量任务状态
 const BatchTaskStatus = {
@@ -27,14 +30,15 @@ const MAX_BATCH_TASKS = 20;
 const MAX_CONCURRENT_JIMENG = 5;
 
 class BatchTaskManager {
-  constructor(automationService, downloadDir) {
-    this.automation = automationService;
+  constructor(dreaminaBin, downloadDir) {
+    this.dreaminaBin = dreaminaBin;
     this.downloadDir = downloadDir;
     this.tasks = [];
     this.running = false;
     this.monitorInterval = null;
     this.currentBatchId = null;
     this.batchMetadata = null;
+    this.pollingTimers = new Map(); // submitId -> timer
     
     // 确保下载目录存在
     if (!fs.existsSync(downloadDir)) {
@@ -46,12 +50,30 @@ class BatchTaskManager {
   }
 
   /**
+   * 调用即梦 CLI
+   */
+  async _callCli(args, timeout = 30000) {
+    try {
+      const { stdout, stderr } = await execFileAsync(this.dreaminaBin, args, { timeout });
+      return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
+    } catch (err) {
+      return { success: false, error: err.stderr || err.message };
+    }
+  }
+
+  /**
+   * 解析 CLI JSON 输出
+   */
+  _parseJson(stdout) {
+    try {
+      return JSON.parse(stdout);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 创建批量任务
-   * @param {Object} batch - 批量任务元信息
-   * @param {string} batch.id - 批次ID
-   * @param {string} batch.name - 批次名称（用于文件夹命名）
-   * @param {string} batch.description - 批次描述
-   * @param {Array} tasks - 任务列表
    */
   createBatch(batch, tasks) {
     if (tasks.length > MAX_BATCH_TASKS) {
@@ -72,13 +94,14 @@ class BatchTaskManager {
       batchId,
       index: index + 1,
       status: BatchTaskStatus.PENDING,
+      submitId: null,
       prompt: task.prompt,
       reason: task.reason,
       materials: task.materials || [],
       expectedEffect: task.expectedEffect || '',
       duration: task.duration || 5,
       aspectRatio: task.aspectRatio || '16:9',
-      model: task.model || 'seedance_2.0_fast',
+      model: task.model || 'seedance2.0fast',
       outputFile: null,
       error: null,
       createdAt: new Date().toISOString(),
@@ -138,6 +161,11 @@ class BatchTaskManager {
       clearInterval(this.monitorInterval);
       this.monitorInterval = null;
     }
+    // 停止所有轮询
+    for (const [submitId, timer] of this.pollingTimers) {
+      clearInterval(timer);
+    }
+    this.pollingTimers.clear();
     console.log('[批量任务] 已停止');
   }
 
@@ -188,9 +216,6 @@ class BatchTaskManager {
     if (activeTasks.length < MAX_CONCURRENT_JIMENG) {
       await this._submitNextTask();
     }
-
-    // 检查是否有任务完成（通过即梦页面状态）
-    // 这部分需要与 AutomationService 配合
   }
 
   /**
@@ -199,7 +224,7 @@ class BatchTaskManager {
   async _submitNextTask() {
     const pendingTask = this.tasks.find(t => t.status === BatchTaskStatus.PENDING);
     if (!pendingTask) {
-      // 所有任务已执行（完成、下载或失败都算"已执行"）
+      // 所有任务已执行
       const allDone = this.tasks.every(
         t => t.status === BatchTaskStatus.COMPLETED
           || t.status === BatchTaskStatus.DOWNLOADED
@@ -218,86 +243,156 @@ class BatchTaskManager {
       pendingTask.status = BatchTaskStatus.SUBMITTED;
       this._persistTasks();
 
-      // 调用 AutomationService 提交任务
-      const result = await this.automation.runStructuredTask({
-        prompt: pendingTask.prompt,
-        materials: pendingTask.materials,
-        model: pendingTask.model,
-        duration: pendingTask.duration,
-        aspectRatio: pendingTask.aspectRatio,
-      });
+      // 构造 CLI 参数
+      let args;
+      const hasMaterials = pendingTask.materials && pendingTask.materials.length > 0;
 
-      if (result.success) {
-        pendingTask.status = BatchTaskStatus.GENERATING;
-        pendingTask.taskId = result.taskId;
-        this._persistTasks();
+      if (hasMaterials) {
+        // multimodal2video
+        args = [
+          'multimodal2video',
+          '--prompt=' + pendingTask.prompt,
+          '--duration=' + pendingTask.duration,
+          '--ratio=' + pendingTask.aspectRatio,
+          '--model_version=' + pendingTask.model,
+        ];
+        
+        // 添加素材
+        const images = pendingTask.materials.filter(m => m.type === 'image').slice(0, 9);
+        const videos = pendingTask.materials.filter(m => m.type === 'video').slice(0, 3);
+        images.forEach(img => args.push('--image=' + img.path));
+        videos.forEach(vid => args.push('--video=' + vid.path));
       } else {
+        // text2video
+        args = [
+          'text2video',
+          '--prompt=' + pendingTask.prompt,
+          '--duration=' + pendingTask.duration,
+          '--ratio=' + pendingTask.aspectRatio,
+          '--model_version=' + pendingTask.model,
+        ];
+      }
+
+      console.log('[批量任务] CLI:', args.join(' '));
+      const result = await this._callCli(args, hasMaterials ? 60000 : 30000);
+
+      if (!result.success) {
         pendingTask.status = BatchTaskStatus.FAILED;
         pendingTask.error = result.error;
         this._persistTasks();
-        // 失败后跳过，继续执行下一个任务
         console.log(`[批量任务] 任务 ${pendingTask.index} 失败: ${result.error}，跳过继续`);
         await this._submitNextTask();
+        return;
       }
+
+      const data = this._parseJson(result.stdout);
+      if (!data || !data.submit_id) {
+        pendingTask.status = BatchTaskStatus.FAILED;
+        pendingTask.error = 'CLI 未返回 submit_id';
+        this._persistTasks();
+        console.log(`[批量任务] 任务 ${pendingTask.index} 无 submit_id，跳过继续`);
+        await this._submitNextTask();
+        return;
+      }
+
+      pendingTask.submitId = data.submit_id;
+      pendingTask.status = BatchTaskStatus.GENERATING;
+      this._persistTasks();
+      
+      // 开始轮询该任务
+      this._startTaskPolling(pendingTask);
+      
+      console.log(`[批量任务] 任务 ${pendingTask.index} 已提交, submitId=${pendingTask.submitId}`);
+
     } catch (e) {
       pendingTask.status = BatchTaskStatus.FAILED;
       pendingTask.error = e.message;
       this._persistTasks();
-      // 异常后跳过，继续执行下一个任务
       console.log(`[批量任务] 任务 ${pendingTask.index} 异常: ${e.message}，跳过继续`);
       await this._submitNextTask();
     }
   }
 
   /**
-   * 任务完成回调
+   * 开始轮询单个任务
    */
-  async onTaskComplete(taskId, downloadUrl) {
-    const task = this.tasks.find(t => t.taskId === taskId);
-    if (!task) return;
+  _startTaskPolling(task) {
+    if (this.pollingTimers.has(task.submitId)) return;
 
-    console.log(`[批量任务] 任务 ${task.index} 完成`);
+    const timer = setInterval(async () => {
+      try {
+        const result = await this._callCli(['query_result', '--submit_id=' + task.submitId], 30000);
+        
+        if (!result.success) {
+          console.warn(`[批量任务轮询] 查询失败: ${result.error}`);
+          return;
+        }
 
-    task.status = BatchTaskStatus.COMPLETED;
-    task.downloadUrl = downloadUrl;
-    this._persistTasks();
+        const data = this._parseJson(result.stdout);
+        if (!data) return;
 
-    // 下载文件
-    await this._downloadTask(task);
+        const status = data.gen_status || data.status || 'unknown';
+        
+        if (status === 'success') {
+          clearInterval(timer);
+          this.pollingTimers.delete(task.submitId);
+          
+          // 下载
+          await this._downloadTask(task);
+          
+          // 继续下一个
+          await this._submitNextTask();
+        } else if (status === 'failed') {
+          clearInterval(timer);
+          this.pollingTimers.delete(task.submitId);
+          
+          task.status = BatchTaskStatus.FAILED;
+          task.error = data.error || '生成失败';
+          this._persistTasks();
+          
+          await this._submitNextTask();
+        }
+      } catch (e) {
+        console.error(`[批量任务轮询] 异常: ${e.message}`);
+      }
+    }, 5000);
 
-    // 更新批次进度
-    if (this.batchMetadata) {
-      this.batchMetadata.completedTasks = this.tasks.filter(
-        t => t.status === BatchTaskStatus.DOWNLOADED
-      ).length;
-    }
-
-    // 继续下一个任务
-    await this._submitNextTask();
+    this.pollingTimers.set(task.submitId, timer);
   }
 
   /**
    * 下载任务结果
    */
   async _downloadTask(task) {
-    if (!task.downloadUrl) return;
-
     try {
-      // 生成文件名：{序号}_{测试要点}_{素材描述}.mp4
+      const batchDir = this.batchMetadata?.downloadDir || this.downloadDir;
       const fileName = this._generateFileName(task);
-      const outputPath = path.join(this.batchMetadata.downloadDir, fileName);
-
-      // 下载文件（这里需要实际的下载逻辑）
-      // const result = await this.automation.downloadFile(task.downloadUrl, outputPath);
       
-      task.status = BatchTaskStatus.DOWNLOADED;
-      task.outputFile = outputPath;
-      this._persistTasks();
+      // CLI 下载到批次目录
+      const result = await this._callCli([
+        'query_result',
+        '--submit_id=' + task.submitId,
+        '--download_dir=' + batchDir,
+      ], 60000);
 
-      console.log(`[批量任务] 已下载: ${fileName}`);
+      if (result.success) {
+        const data = this._parseJson(result.stdout);
+        // CLI 可能重命名文件，记录实际路径
+        const actualPath = data?.download_path || path.join(batchDir, fileName);
+        
+        task.status = BatchTaskStatus.DOWNLOADED;
+        task.outputFile = actualPath;
+        this._persistTasks();
+
+        console.log(`[批量任务] 已下载: ${actualPath}`);
+      } else {
+        task.status = BatchTaskStatus.COMPLETED; // 下载失败但任务完成
+        task.error = '下载失败: ' + result.error;
+        this._persistTasks();
+      }
     } catch (e) {
       console.error(`[批量任务] 下载失败:`, e.message);
-      task.error = `下载失败: ${e.message}`;
+      task.error = '下载失败: ' + e.message;
       this._persistTasks();
     }
   }
@@ -306,19 +401,13 @@ class BatchTaskManager {
    * 生成文件名
    */
   _generateFileName(task) {
-    // 格式：{序号}_{测试要点}_{素材描述}.mp4
     const index = String(task.index).padStart(2, '0');
-    
-    // 从 reason 中提取测试要点（取前20字）
     const testPoint = (task.reason || '测试')
       .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
       .slice(0, 20);
-    
-    // 素材描述
     const materialDesc = task.materials?.length > 0
       ? `${task.materials.length}素材`
       : '无素材';
-
     return `${index}_${testPoint}_${materialDesc}.mp4`;
   }
 
@@ -331,13 +420,17 @@ class BatchTaskManager {
       clearInterval(this.monitorInterval);
       this.monitorInterval = null;
     }
+    // 停止所有轮询
+    for (const [submitId, timer] of this.pollingTimers) {
+      clearInterval(timer);
+    }
+    this.pollingTimers.clear();
 
     if (this.batchMetadata) {
       this.batchMetadata.status = 'completed';
       this.batchMetadata.completedAt = new Date().toISOString();
     }
 
-    // 统计结果
     const succeeded = this.tasks.filter(
       t => t.status === BatchTaskStatus.COMPLETED || t.status === BatchTaskStatus.DOWNLOADED
     ).length;
@@ -347,7 +440,6 @@ class BatchTaskManager {
     console.log(`[批量任务] 结果: ${succeeded} 成功 / ${failed} 失败`);
     console.log(`[批量任务] 文件保存在: ${this.batchMetadata?.downloadDir}`);
 
-    // 通知渲染进程（如果有回调）
     if (this._onCompleteCallback) {
       this._onCompleteCallback({
         batch: this.batchMetadata,
@@ -358,7 +450,6 @@ class BatchTaskManager {
       });
     }
 
-    // 保存批次摘要
     this._saveBatchSummary();
   }
 
