@@ -13,7 +13,7 @@ chromium.use(stealth);
 
 const JIMENG_URL = 'https://jimeng.jianying.com/ai-tool/home';
 const USER_DATA_DIR = path.join(process.env.HOME, 'Library/Application Support/jimeng-desktop/jimeng-profile');
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 
 let results = { pass: 0, fail: 0, skip: 0, details: [] };
 
@@ -26,16 +26,16 @@ function log(status, test, detail = '') {
 
 // ===== 测试 1：AI 服务 =====
 async function testAIService() {
-  console.log('\n🧠 测试 1：AI 服务（OpenRouter API）');
+  console.log('\n🧠 测试 1：AI 服务（DeepSeek API）');
   
-  if (!OPENROUTER_KEY) {
-    log('skip', 'AI 服务', '未配置 OPENROUTER_API_KEY，跳过');
+  if (!DEEPSEEK_KEY) {
+    log('skip', 'AI 服务', '未配置 DEEPSEEK_API_KEY，跳过');
     return;
   }
 
   try {
     const body = JSON.stringify({
-      model: 'xiaomi/mimo-v2-pro',
+      model: 'deepseek-chat',
       messages: [
         { role: 'system', content: 'You are a helpful assistant. Reply with just "OK" and nothing else.' },
         { role: 'user', content: 'Say OK' }
@@ -45,14 +45,14 @@ async function testAIService() {
     });
 
     const result = await new Promise((resolve, reject) => {
-      const url = new URL('https://openrouter.ai/api/v1/chat/completions');
+      const url = new URL('https://api.deepseek.com/v1/chat/completions');
       const req = https.request({
         hostname: url.hostname,
         path: url.pathname,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'Authorization': `Bearer ${DEEPSEEK_KEY}`,
         },
       }, (res) => {
         let data = '';
@@ -81,7 +81,7 @@ async function testAIService() {
 
     // 测试提示词改写
     const rewriteBody = JSON.stringify({
-      model: 'xiaomi/mimo-v2-pro',
+      model: 'deepseek-chat',
       messages: [
         { role: 'system', content: 'You are a prompt engineer. Reply with valid JSON only: {"prompt":"...","duration":5,"aspectRatio":"16:9","type":"video"}' },
         { role: 'user', content: '帮我生成一段猫咪奔跑的视频' }
@@ -91,14 +91,14 @@ async function testAIService() {
     });
 
     const rewriteResult = await new Promise((resolve, reject) => {
-      const url = new URL('https://openrouter.ai/api/v1/chat/completions');
+      const url = new URL('https://api.deepseek.com/v1/chat/completions');
       const req = https.request({
         hostname: url.hostname,
         path: url.pathname,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'Authorization': `Bearer ${DEEPSEEK_KEY}`,
         },
       }, (res) => {
         let data = '';
