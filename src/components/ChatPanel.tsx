@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play, XCircle } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type BatchTaskItem } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { PromptTemplates } from './PromptTemplates';
@@ -8,9 +8,9 @@ import { PromptTemplates } from './PromptTemplates';
 function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
   return (
     <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
-      <div className="flex">
-        <div className="w-1 bg-accent-gradient flex-shrink-0" />
-        <div className="p-4 flex-1">
+      {/* Top accent band - 重构：改为顶部边条 */}
+      <div className="h-1 bg-accent-gradient flex-shrink-0" />
+      <div className="p-4">
           <p className="text-xs text-accent font-medium mb-3 flex items-center gap-1.5">
             <span>🎯</span> 选择任务模式
           </p>
@@ -33,7 +33,6 @@ function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 }
@@ -46,6 +45,8 @@ function BatchConfirmCard({
   onConfirm,
   onEdit,
   onTaskEdit,
+  onTaskDelete,
+  onBack,
 }: {
   tasks: BatchTaskItem[];
   batchName: string;
@@ -53,26 +54,108 @@ function BatchConfirmCard({
   onConfirm: () => void;
   onEdit: () => void;
   onTaskEdit: (index: number) => void;
+  onTaskDelete: (index: number) => void;
+  onBack: () => void;
 }) {
+  const editingTaskIndex = useStore((s) => s.editingTaskIndex);
+  const setEditingTaskIndex = useStore((s) => s.setEditingTaskIndex);
+  const batchTasks = useStore((s) => s.batchTasks);
+  const setBatchTasks = useStore((s) => s.setBatchTasks);
+
+  // 当前正在编辑的任务
+  const editingTask = editingTaskIndex !== null ? batchTasks[editingTaskIndex] : null;
+
   return (
     <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[90%] animate-fade-in-up">
-      <div className="flex">
-        <div className="w-1 bg-accent-gradient flex-shrink-0" />
-        <div className="p-4 flex-1 max-h-[400px] overflow-y-auto">
+      {/* Top accent band - 重构：改为顶部边条 */}
+      <div className="h-1 bg-accent-gradient flex-shrink-0" />
+      <div className="p-4 max-h-[400px] overflow-y-auto">
           <p className="text-xs text-accent font-medium mb-2 flex items-center gap-1.5">
             <span>📦</span> 批量任务确认
           </p>
           <p className="text-sm text-text-primary font-medium mb-1">{batchName}</p>
           {description && <p className="text-xs text-text-secondary mb-3">{description}</p>}
-          
+
           <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">
             共 {tasks.length} 个任务
           </p>
 
+          {/* 编辑表单 */}
+          {editingTaskIndex !== null && editingTask && (
+            <div className="bg-surface-3 rounded-lg p-3 mb-3 border border-brand">
+              <p className="text-xs font-medium text-brand mb-2">
+                ✏️ 编辑任务 #{editingTaskIndex + 1}
+              </p>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] text-text-muted mb-1 block">描述</label>
+                  <textarea
+                    value={editingTask.prompt}
+                    onChange={(e) => {
+                      const updatedTasks = [...batchTasks];
+                      updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], prompt: e.target.value };
+                      setBatchTasks(updatedTasks);
+                    }}
+                    className="w-full bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary resize-none"
+                    rows={2}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <div>
+                    <label className="text-[10px] text-text-muted mb-1 block">时长</label>
+                    <select
+                      value={editingTask.duration}
+                      onChange={(e) => {
+                        const updatedTasks = [...batchTasks];
+                        updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], duration: parseInt(e.target.value) };
+                        setBatchTasks(updatedTasks);
+                      }}
+                      className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary"
+                    >
+                      {[4, 5, 6, 8, 10, 12, 15].map((d) => (
+                        <option key={d} value={d}>{d}s</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-text-muted mb-1 block">比例</label>
+                    <select
+                      value={editingTask.aspectRatio}
+                      onChange={(e) => {
+                        const updatedTasks = [...batchTasks];
+                        updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], aspectRatio: e.target.value };
+                        setBatchTasks(updatedTasks);
+                      }}
+                      className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary"
+                    >
+                      {['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'].map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => setEditingTaskIndex(null)}
+                    className="px-3 py-1.5 text-xs bg-brand text-white rounded-md"
+                  >
+                    ✓ 保存
+                  </button>
+                  <button
+                    onClick={() => setEditingTaskIndex(null)}
+                    className="px-3 py-1.5 text-xs text-text-secondary bg-surface-2 rounded-md"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 任务列表 */}
           <div className="space-y-2 mb-4">
-            {tasks.map((task, i) => (
-              <div key={task.id} className="bg-surface-3 rounded-lg p-3">
+            {batchTasks.map((task, i) => (
+              <div key={task.id} className={`bg-surface-3 rounded-lg p-3 ${editingTaskIndex === i ? 'ring-1 ring-brand' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-text-primary mb-1">
@@ -83,12 +166,21 @@ function BatchConfirmCard({
                       <p className="text-[10px] text-text-muted mt-1">💡 {task.reason}</p>
                     )}
                   </div>
-                  <button
-                    onClick={() => onTaskEdit(i)}
-                    className="text-[10px] text-brand hover:underline shrink-0"
-                  >
-                    编辑
-                  </button>
+                  {/* 编辑/删除按钮 */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setEditingTaskIndex(i)}
+                      className="text-[10px] text-brand hover:underline"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      onClick={() => onTaskDelete(i)}
+                      className="text-[10px] text-error hover:underline"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-[10px] text-text-muted">
                   <span>{task.duration}s</span>
@@ -109,10 +201,17 @@ function BatchConfirmCard({
           <div className="flex items-center gap-2">
             <button
               onClick={onConfirm}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white text-xs font-medium rounded-lg transition-all hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white text-xs font-medium rounded-lg transition-all hover:-translate-y-0.5"
             >
               <CheckCircle size={14} />
               确认全部提交
+            </button>
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all"
+            >
+              <ChevronDown size={14} className="rotate-180" />
+              返回调整
             </button>
             <button
               onClick={onEdit}
@@ -123,17 +222,16 @@ function BatchConfirmCard({
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 }
 
-// ── Empty State Card (问题2：空态引导) ──
+// ── Empty State Card (问题2:空态引导) ──
 function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void }) {
   const examples = [
-    '一个女孩在海边跳舞，夕阳背景，浪漫风格',
+    '一个女孩在海边跳舞,夕阳背景,浪漫风格',
     '帮我把这张照片变成 5 秒的短视频',
-    '美食探店 vlog 片头，热气腾腾的火锅特写',
+    '美食探店 vlog 片头,热气腾腾的火锅特写',
   ];
 
   return (
@@ -143,8 +241,8 @@ function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void
         <div className="w-14 h-14 rounded-2xl bg-brand-gradient flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-lg)]">
           <Sparkles size={24} className="text-white" />
         </div>
-        <h2 className="text-lg font-semibold text-text-primary mb-1.5">VidClaw - 说人话，出视频</h2>
-        <p className="text-sm text-text-muted mb-8">描述你想要的视频，AI 帮你生成</p>
+        <h2 className="text-lg font-semibold text-text-primary mb-1.5">VidClaw - 说人话,出视频</h2>
+        <p className="text-sm text-text-muted mb-8">描述你想要的视频,AI 帮你生成</p>
 
         {/* Example prompts */}
         <div className="space-y-2.5">
@@ -165,67 +263,206 @@ function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void
 
         {/* Usage hint */}
         <p className="text-[11px] text-text-disabled mt-6">
-          💡 登录即梦后，直接输入描述即可生成视频
+          💡 登录即梦后,直接输入描述即可生成视频
         </p>
       </div>
     </div>
   );
 }
 
-// ── Onboarding Overlay (问题6：新手引导) ──
+// ── Onboarding Overlay (重构3:完善新手引导) ──
 function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; isLoggedIn: boolean }) {
-  const loggedInSteps = [
-    { icon: <Type size={22} />, title: '输入描述', desc: '用自然语言描述你想生成的视频' },
-    { icon: <Video size={22} />, title: '等待出片', desc: 'AI 自动优化并生成视频' },
+  const [currentStep, setCurrentStep] = useState(0);
+  const [checkingVip, setCheckingVip] = useState(false);
+  const [isVip, setIsVip] = useState<boolean | null>(null);
+
+  const handleCheckVip = async () => {
+    setCheckingVip(true);
+    try {
+      const result = await window.api.checkCredits();
+      const loggedIn = result.isLoggedIn ?? false;
+      setIsVip(result.success ? loggedIn : false);
+      useStore.getState().setIsLoggedIn(result.success && loggedIn);
+    } catch (e) {
+      setIsVip(false);
+    } finally {
+      setCheckingVip(false);
+    }
+  };
+
+  // 三步引导内容
+  const steps = [
+    {
+      title: '认识 VidClaw',
+      content: (
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-2xl bg-brand-gradient flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-lg)]">
+            <Sparkles size={32} className="text-white" />
+          </div>
+          <h4 className="text-lg font-semibold text-text-primary mb-2">说人话，出视频</h4>
+          <p className="text-sm text-text-muted mb-4">
+            VidClaw 是你的 AI 视频创作助手，用自然语言描述想法，AI 自动生成高质量视频。
+          </p>
+          <div className="bg-surface-2 rounded-lg p-3 text-xs text-text-secondary">
+            <p className="font-medium mb-2">核心能力</p>
+            <ul className="space-y-1 text-left">
+              <li>• 自动优化提示词，无需精通 AI 技巧</li>
+              <li>• 支持上传图片/视频作为参考素材</li>
+              <li>• 批量任务模式，一次测试多个场景</li>
+              <li>• 自动下载并整理生成结果</li>
+            </ul>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: '前提条件',
+      content: (
+        <div>
+          <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-warning flex items-center gap-2 mb-2">
+              <AlertTriangle size={16} /> 需要即梦高级会员
+            </p>
+            <p className="text-xs text-text-muted">
+              VidClaw 使用即梦 AI 的官方 CLI 工具，需要高级会员账号才能调用视频生成 API。
+            </p>
+          </div>
+          
+          {isVip === null && !checkingVip && (
+            <button
+              onClick={handleCheckVip}
+              className="w-full py-2 bg-brand hover:bg-brand-gradient text-white text-sm rounded-lg transition-all"
+            >
+              检测会员状态
+            </button>
+          )}
+          
+          {checkingVip && (
+            <div className="flex items-center justify-center gap-2 py-2">
+              <Loader2 size={16} className="animate-spin text-brand" />
+              <span className="text-sm text-text-muted">正在检测...</span>
+            </div>
+          )}
+          
+          {isVip === true && (
+            <div className="bg-success/10 border border-success/20 rounded-lg p-3">
+              <p className="text-sm text-success flex items-center gap-2">
+                <CheckCircle size={16} /> 已检测到高级会员账号
+              </p>
+            </div>
+          )}
+          
+          {isVip === false && (
+            <div className="bg-error/10 border border-error/20 rounded-lg p-3 mb-3">
+              <p className="text-sm text-error flex items-center gap-2 mb-2">
+                <XCircle size={16} /> 未检测到高级会员
+              </p>
+              <a
+                href="https://jimeng.jianying.com"
+                target="_blank"
+                className="text-xs text-brand hover:underline"
+              >
+                前往即梦网页升级会员
+              </a>
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: '快速入门',
+      content: (
+        <div>
+          <p className="text-sm text-text-muted mb-3">试试这些示例：</p>
+          <div className="space-y-2">
+            {[
+              '一个女孩在海边跳舞，夕阳背景，浪漫风格',
+              '帮我把这张照片变成 5 秒短视频',
+              '美食探店 vlog 片头，热气腾腾的火锅特写',
+            ].map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  onDismiss();
+                  useStore.getState().setGuidedStep('logged-in-ready');
+                }}
+                className="w-full text-left px-3 py-2 bg-surface-2 hover:bg-surface-3 rounded-lg text-xs text-text-secondary hover:text-text-primary transition-all border border-border-subtle"
+              >
+                {i + 1}. {prompt}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-text-disabled mt-3 text-center">
+            点击示例开始创作，或跳过自定义描述
+          </p>
+        </div>
+      ),
+    },
   ];
 
-  const loggedOutSteps = [
-    { icon: <Globe size={22} />, title: '登录即梦', desc: '打开浏览器，扫码登录即梦账号' },
-    { icon: <Type size={22} />, title: '输入描述', desc: '用自然语言描述你想生成的视频' },
-    { icon: <Video size={22} />, title: '等待出片', desc: 'AI 自动优化并生成视频' },
-  ];
-
-  const steps = isLoggedIn ? loggedInSteps : loggedOutSteps;
-  const stepCount = steps.length;
+  const currentStepData = steps[currentStep];
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-overlay-in">
-      <div className="bg-surface-1 border border-border rounded-2xl p-8 max-w-sm w-full mx-4 shadow-[var(--shadow-elevated)] animate-card-pop">
-        <h3 className="text-base font-semibold text-text-primary text-center mb-1">欢迎使用 VidClaw</h3>
-        <p className="text-xs text-text-muted text-center mb-6">{stepCount} 步开始创作</p>
-
-        <div className="space-y-4 mb-8">
-          {steps.map((step, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-surface-3 flex items-center justify-center text-brand shrink-0">
-                {step.icon}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-text-primary">{i + 1}. {step.title}</p>
-                <p className="text-xs text-text-muted">{step.desc}</p>
-              </div>
-            </div>
+      <div className="bg-surface-1 border border-border rounded-2xl p-6 max-w-md w-full mx-4 shadow-[var(--shadow-elevated)] animate-card-pop">
+        {/* 进度指示器 */}
+        <div className="flex items-center justify-center gap-2 mb-4">
+          {steps.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === currentStep ? 'w-8 bg-brand' : 'w-2 bg-surface-3'
+              }`}
+            />
           ))}
         </div>
 
-        <button
-          onClick={onDismiss}
-          className="w-full py-2.5 bg-brand-gradient text-white text-sm font-medium rounded-xl hover:shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 active:translate-y-0"
-        >
-          开始使用
-        </button>
+        {/* Step 标题 */}
+        <h3 className="text-base font-semibold text-text-primary text-center mb-4">
+          Step {currentStep + 1}: {currentStepData.title}
+        </h3>
+
+        {/* Step 内容 */}
+        <div className="mb-6">
+          {currentStepData.content}
+        </div>
+
+        {/* 按钮 */}
+        <div className="flex items-center gap-3">
+          {currentStep > 0 && (
+            <button
+              onClick={() => setCurrentStep(currentStep - 1)}
+              className="px-4 py-2 text-sm text-text-secondary bg-surface-2 hover:bg-surface-3 rounded-lg transition-all"
+            >
+              上一步
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (currentStep < steps.length - 1) {
+                setCurrentStep(currentStep + 1);
+              } else {
+                onDismiss();
+                useStore.getState().setGuidedStep(isVip ? 'logged-in-ready' : 'welcome');
+              }
+            }}
+            className="flex-1 py-2 bg-brand hover:bg-brand-gradient text-white text-sm font-medium rounded-lg transition-all"
+          >
+            {currentStep < steps.length - 1 ? '下一步' : '开始使用'}
+          </button>
+        </div>
         <button
           onClick={onDismiss}
           className="w-full mt-2 py-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
         >
-          跳过
+          跳过引导
         </button>
       </div>
     </div>
   );
 }
 
-// ── Progress Message (问题5：进度消息样式增强) ──
+// ── Progress Message (问题5:进度消息样式增强) ──
 function ProgressMessage({ msg }: { msg: Message }) {
   const data = msg.data as any;
   const progressType = data?.progressType || 'generating';
@@ -403,23 +640,28 @@ function GuideButton({ label, onClick, disabled, icon }: {
 
 // ── Confirm Card (left accent band + clean layout) ──
 function ConfirmCard({ 
-  task, onConfirm, onEdit, hasFiles, selectedModel, selectedDuration, selectedRatio,
-  materials, onDurationChange, onRatioChange 
+  task, onConfirm, onEdit, onBack, hasFiles, selectedModel, selectedDuration, selectedRatio,
+  materials, onDurationChange, onRatioChange, onModelChange, onEditMaterial
 }: {
   task: any;
   onConfirm: () => void;
   onEdit: () => void;
+  onBack?: () => void;
   hasFiles?: boolean;
   selectedModel?: string;
   selectedDuration?: number;
   selectedRatio?: string;
-  materials?: { images: any[]; videos: any[]; audios: any[] };
-  onDurationChange?: (d: number) => void;
-  onRatioChange?: (r: string) => void;
+  materials?: { images: any[]; videos: any[]; audios: any[] }; 
+  onDurationChange?: (d: number) => void; 
+  onRatioChange?: (r: string) => void; 
+  onModelChange?: (m: string) => void;
+  onEditMaterial?: (index: number, newDesc: string) => void;
 }) {
+  // 分步确认流程：参数确认状态
+  const [paramsConfirmed, setParamsConfirmed] = useState(false);
   const modelLabels: Record<string, string> = {
-    'seedance_2.0_fast': 'Seedance 2.0 Fast',
-    'seedance_2.0': 'Seedance 2.0',
+    'seedance2.0fast': 'Seedance 2.0 Fast',
+    'seedance2.0': 'Seedance 2.0',
   };
 
   const durations = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -434,10 +676,9 @@ function ConfirmCard({
 
   return (
     <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
-      {/* Left accent band */}
-      <div className="flex">
-        <div className="w-1 bg-brand-gradient flex-shrink-0" />
-        <div className="p-4 flex-1">
+      {/* Top accent band - 重构：改为顶部边条 */}
+      <div className="h-1 bg-brand-gradient flex-shrink-0" />
+      <div className="p-4">
           <p className="text-xs text-brand font-medium mb-2 flex items-center gap-1.5">
             <span>✨</span> AI 优化后的提示词
           </p>
@@ -446,75 +687,75 @@ function ConfirmCard({
           {/* 改写理由 */}
           {task.reason && (
             <p className="text-xs text-text-secondary mb-3 bg-surface-3 rounded-lg px-3 py-2 border-l-2 border-accent">
-              💡 <span className="font-medium">改写理由：</span>{task.reason}
+              💡 <span className="font-medium">改写理由:</span>{task.reason}
             </p>
           )}
 
-          {/* 素材映射表 */}
-          {allMaterials.length > 0 && (
-            <div className="mb-3 bg-surface-3 rounded-lg px-3 py-2.5 border border-border-subtle">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
-                <span>📋</span> 素材映射
-              </p>
-              <div className="space-y-1.5">
-                {(materials?.images || []).map((m, i) => (
-                  <p key={`img-${i}`} className="text-xs text-text-secondary flex items-center gap-1.5">
-                    <span>🖼️</span>
-                    <span className="text-accent font-medium">@图片{i + 1}</span>
-                    <span className="text-text-muted">→</span>
-                    <span>你的第{i + 1}张图片</span>
-                    <span className="text-text-disabled">（{m.name?.replace(/^图片\d+$/, '') || m.name}）</span>
-                  </p>
-                ))}
-                {(materials?.videos || []).map((m, i) => (
-                  <p key={`vid-${i}`} className="text-xs text-text-secondary flex items-center gap-1.5">
-                    <span>🎬</span>
-                    <span className="text-accent font-medium">@视频{i + 1}</span>
-                    <span className="text-text-muted">→</span>
-                    <span>你的第{i + 1}个视频</span>
-                    <span className="text-text-disabled">（{m.name?.replace(/^视频\d+$/, '') || m.name}）</span>
-                  </p>
-                ))}
-                {(materials?.audios || []).map((m, i) => (
-                  <p key={`aud-${i}`} className="text-xs text-text-secondary flex items-center gap-1.5">
-                    <span>🎵</span>
-                    <span className="text-accent font-medium">@音频{i + 1}</span>
-                    <span className="text-text-muted">→</span>
-                    <span>你的第{i + 1}个音频</span>
-                    <span className="text-text-disabled">（{m.name?.replace(/^音频\d+$/, '') || m.name}）</span>
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 素材预览 */}
+          {/* 素材映射表（可编辑标签） */}
           {allMaterials.length > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">已上传素材（点击预览）</p>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">已上传素材（点击可编辑描述）</p>
               <div className="flex flex-wrap gap-2">
                 {allMaterials.map((m, i) => (
-                  <FilePreviewChip key={i} material={m} />
+                  <MaterialTag
+                    key={i}
+                    material={m}
+                    index={i}
+                    onEdit={(newDesc) => onEditMaterial?.(i, newDesc)}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {/* 参数选择器 */}
+          {/* 参数选择器 - 独立区块，视觉权重提升 */}
           {hasFiles && (
-            <div className="mb-3 space-y-2">
+            <div className="mb-4 p-3 bg-surface-3 rounded-lg border border-border-subtle">
+              <p className="text-xs text-text-primary font-medium mb-3 flex items-center gap-1.5">
+                <span>⚙️</span> 请确认生成参数
+              </p>
+              
+              {/* 模型版本选择 */}
+              <div className="mb-3">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">模型版本</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onModelChange?.('seedance2.0fast')}
+                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 ${
+                      selectedModel === 'seedance2.0fast' || !selectedModel
+                        ? 'bg-brand text-white'
+                        : 'bg-surface-2 text-text-secondary hover:bg-border'
+                    }`}
+                  >
+                    <span className="font-medium">Fast</span>
+                    <span className="block text-[10px] opacity-80">速度快，适合简单场景</span>
+                  </button>
+                  <button
+                    onClick={() => onModelChange?.('seedance2.0')}
+                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 ${
+                      selectedModel === 'seedance2.0'
+                        ? 'bg-brand text-white'
+                        : 'bg-surface-2 text-text-secondary hover:bg-border'
+                    }`}
+                  >
+                    <span className="font-medium">标准</span>
+                    <span className="block text-[10px] opacity-80">质量高，适合复杂场景</span>
+                  </button>
+                </div>
+              </div>
+              
               {/* 时长选择 */}
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">时长</p>
-                <div className="flex flex-wrap gap-1">
-                  {durations.map((d) => (
+              <div className="mb-3">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">时长 <span className="text-text-secondary normal-case">(4-6s适合短视频，10-15s适合展示)</span></p>
+                <div className="grid grid-cols-6 gap-1">
+                  {durations.slice(0, 12).map((d) => (
                     <button
                       key={d}
                       onClick={() => onDurationChange?.(d)}
                       className={`px-2 py-1 text-[11px] rounded-md transition-all ${
                         selectedDuration === d
                           ? 'bg-brand text-white'
-                          : 'bg-surface-3 text-text-secondary hover:bg-border'
+                          : 'bg-surface-2 text-text-secondary hover:bg-border'
                       }`}
                     >
                       {d}s
@@ -522,10 +763,11 @@ function ConfirmCard({
                   ))}
                 </div>
               </div>
+              
               {/* 比例选择 */}
-              <div>
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">画幅比例</p>
-                <div className="flex flex-wrap gap-1">
+              <div className="mb-3">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">画幅比例 <span className="text-text-secondary normal-case">(9:16=抖音竖屏，16:9=B站横屏)</span></p>
+                <div className="grid grid-cols-3 gap-1">
                   {ratios.map((r) => (
                     <button
                       key={r}
@@ -533,7 +775,7 @@ function ConfirmCard({
                       className={`px-2 py-1 text-[11px] rounded-md transition-all ${
                         selectedRatio === r
                           ? 'bg-brand text-white'
-                          : 'bg-surface-3 text-text-secondary hover:bg-border'
+                          : 'bg-surface-2 text-text-secondary hover:bg-border'
                       }`}
                     >
                       {r}
@@ -541,10 +783,27 @@ function ConfirmCard({
                   ))}
                 </div>
               </div>
+              
+              {/* 确认参数按钮 */}
+              {!paramsConfirmed && (
+                <button
+                  onClick={() => setParamsConfirmed(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-accent hover:bg-accent/90 text-white text-xs font-medium rounded-lg transition-all"
+                >
+                  <CheckCircle size={14} />
+                  确认参数并继续
+                </button>
+              )}
+              {paramsConfirmed && (
+                <p className="text-[10px] text-brand flex items-center gap-1">
+                  <CheckCircle size={12} />
+                  参数已确认
+                </p>
+              )}
             </div>
           )}
 
-          {/* 标签展示（无素材时） */}
+          {/* 标签展示(无素材时) */}
           {!hasFiles && (
             <div className="flex items-center gap-2 text-xs text-text-secondary mb-4 flex-wrap">
               <span className="bg-surface-3 rounded-md px-2 py-0.5 font-mono">{task.type || 'video'}</span>
@@ -555,17 +814,31 @@ function ConfirmCard({
           )}
 
           {hasFiles && (
-            <p className="text-[10px] text-accent mb-3">⚡ 结构化模式：素材将通过 API 直接上传</p>
+            <p className="text-[10px] text-accent mb-3">⚡ 结构化模式:素材将通过 API 直接上传</p>
           )}
 
           <div className="flex items-center gap-2">
             <button
               onClick={onConfirm}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white text-xs font-medium rounded-lg transition-all duration-150 hover:-translate-y-0.5"
+              disabled={hasFiles && !paramsConfirmed}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 ${
+                hasFiles && !paramsConfirmed
+                  ? 'bg-surface-3 text-text-muted cursor-not-allowed'
+                  : 'bg-brand hover:bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white hover:-translate-y-0.5'
+              }`}
             >
               <CheckCircle size={14} />
               确认提交
             </button>
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all duration-150"
+              >
+                <ChevronDown size={14} className="rotate-180" />
+                返回修改
+              </button>
+            )}
             <button
               onClick={onEdit}
               className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all duration-150"
@@ -575,8 +848,56 @@ function ConfirmCard({
             </button>
           </div>
         </div>
-      </div>
     </div>
+  );
+}
+
+// ── Material Tag (可编辑素材标签) ──
+function MaterialTag({ material, index, onEdit }: { material: { type: string; name: string; path: string; description?: string }; index: number; onEdit: (newDesc: string) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [desc, setDesc] = useState(material.description || material.name);
+
+  const isImage = material.type === 'image';
+  const isVideo = material.type === 'video';
+  const isAudio = material.type === 'audio';
+  const icon = isImage ? '📷' : isVideo ? '🎬' : '🎵';
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-1">
+        <span className="text-xs">{icon}</span>
+        <input
+          type="text"
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          className="bg-transparent text-xs text-text-primary outline-none w-32"
+          autoFocus
+        />
+        <button
+          onClick={() => { onEdit(desc); setIsEditing(false); }}
+          className="text-xs text-brand hover:underline"
+        >
+          ✓
+        </button>
+        <button
+          onClick={() => setIsEditing(false)}
+          className="text-xs text-text-muted hover:underline"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setIsEditing(true)}
+      className="flex items-center gap-1 bg-surface-2 hover:bg-surface-3 rounded-lg px-2 py-1 transition-colors"
+    >
+      <span className="text-xs">{icon}</span>
+      <span className="text-xs text-text-primary">{desc}</span>
+      <span className="text-xs text-text-muted">✏️</span>
+    </button>
   );
 }
 
@@ -587,10 +908,15 @@ function FilePreviewChip({ material }: { material: { type: string; name: string;
   const isAudio = material.type === 'audio';
 
   const handlePreview = async () => {
-    // 用系统默认程序打开文件
+    // Bug 3 修复：添加 fallback
+    if (!material.path) {
+      alert('文件路径无效');
+      return;
+    }
     const result = await window.api.openFile(material.path);
     if (!result.success) {
-      console.error('打开文件失败:', result.error);
+      // 尝试打开所在目录
+      await window.api.openDownloadDir();
     }
   };
 
@@ -614,9 +940,10 @@ function FilePreviewChip({ material }: { material: { type: string; name: string;
 // ═══════════════════════════════════════════
 export function ChatPanel() {
   const {
-    messages, addMessage, isSubmitting, setSubmitting,
+    messages, addMessage, setMessages, isSubmitting, setSubmitting,
     statusText, setStatusText,
     guidedStep, setGuidedStep,
+    taskMode, setTaskMode,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -637,6 +964,48 @@ export function ChatPanel() {
   const [useStructuredFlow] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('vidclaw_onboarded'));
   const [showMaterialLib, setShowMaterialLib] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false); // 重构5: Prompt模板默认隐藏
+
+  // ── 素材描述编辑处理 ──
+  function handleEditMaterial(index: number, newDesc: string) {
+    if (!pendingTask || !pendingTask.materials) return;
+
+    // 更新素材描述
+    const allMaterials = [
+      ...(pendingTask.materials.images || []),
+      ...(pendingTask.materials.videos || []),
+      ...(pendingTask.materials.audios || []),
+    ];
+
+    if (index >= allMaterials.length) return;
+
+    const material = allMaterials[index];
+    material.description = newDesc;
+
+    // 根据 type 更新回对应的数组
+    let imgIdx = 0, vidIdx = 0, audIdx = 0;
+    allMaterials.forEach((m, i) => {
+      if (m.type === 'image') {
+        if (i === index) {
+          pendingTask.materials.images[imgIdx] = m;
+        }
+        imgIdx++;
+      } else if (m.type === 'video') {
+        if (i === index) {
+          pendingTask.materials.videos[vidIdx] = m;
+        }
+        vidIdx++;
+      } else if (m.type === 'audio') {
+        if (i === index) {
+          pendingTask.materials.audios[audIdx] = m;
+        }
+        audIdx++;
+      }
+    });
+
+    // 触发重新渲染（通过 setPendingTask）
+    setPendingTask({ ...pendingTask });
+  }
 
   // Auto-scroll
   useEffect(() => {
@@ -657,7 +1026,7 @@ export function ChatPanel() {
       addMessage({
         id: 'welcome',
         role: 'assistant',
-        content: '你好！我是即梦视频助手。先帮你打开即梦页面，准备好了吗？',
+        content: '你好!我是 VidClaw。先帮你打开即梦页面,准备好了吗?',
         timestamp: new Date(),
         type: 'guide-button',
       });
@@ -696,42 +1065,121 @@ export function ChatPanel() {
       timestamp: new Date(),
     });
 
-    setGuidedStep('opening-browser');
+    setGuidedStep('checking-login');
     addMessage({
-      id: Date.now().toString() + '_opening',
+      id: Date.now().toString() + '_checking',
       role: 'assistant',
-      content: '正在打开浏览器...',
+      content: '正在检查登录状态...',
       timestamp: new Date(),
     });
 
     try {
-      const result = await window.api.launchBrowser();
-      if (!result.success) {
+      // Step 1: 检查已有登录态
+      const creditsResult = await window.api.checkCredits();
+
+      if (creditsResult.success && creditsResult.isLoggedIn) {
+        // 已登录,直接进入就绪状态
         addMessage({
-          id: Date.now().toString() + '_err',
+          id: Date.now().toString() + '_already_login',
           role: 'assistant',
-          content: `❌ 打开浏览器失败: ${result.error || '未知错误'}`,
+          content: `✅ 已登录账号(剩余积分: ${creditsResult.credits || 0}),正在初始化...`,
           timestamp: new Date(),
-          type: 'error',
         });
-        setGuidedStep('welcome');
+        useStore.getState().setIsLoggedIn(true);
+
+        // 自动初始化模式
+        try {
+          const modeResult = await window.api.initMode();
+          if (modeResult.success) {
+            setGuidedStep('logged-in-ready');
+            addMessage({
+              id: Date.now().toString() + '_mode_ok',
+              role: 'assistant',
+              content: '✅ 视频创作模式已就绪!请描述你想生成的视频。',
+              timestamp: new Date(),
+              type: 'mode-select',
+            });
+          } else {
+            setGuidedStep('logged-in-ready');
+            addMessage({
+              id: Date.now().toString() + '_mode_warn',
+              role: 'assistant',
+              content: '⚠️ 模式初始化遇到问题,请手动选择模式后描述需求',
+              timestamp: new Date(),
+            });
+          }
+        } catch (modeErr) {
+          setGuidedStep('logged-in-ready');
+          addMessage({
+            id: Date.now().toString() + '_mode_err',
+            role: 'assistant',
+            content: '请手动选择视频创作模式,然后描述需求',
+            timestamp: new Date(),
+          });
+        }
         return;
       }
 
+      // Step 2: 未登录,进行 CLI 登录
       setGuidedStep('waiting-login');
       addMessage({
-        id: Date.now().toString() + '_scan',
+        id: Date.now().toString() + '_need_login',
         role: 'assistant',
-        content: '浏览器已打开，请在弹出的浏览器窗口中扫码登录即梦',
+        content: '未检测到登录态,正在启动登录流程...',
         timestamp: new Date(),
       });
 
-      startLoginPolling();
+      // 启动登录
+      const loginResult = await window.api.authLogin();
+
+      // 登录成功(无论是复用还是扫码)
+      if (loginResult.success) {
+        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+        addMessage({
+          id: Date.now().toString() + '_login_ok',
+          role: 'assistant',
+          content: '✅ 登录成功!',
+          timestamp: new Date(),
+        });
+        useStore.getState().setIsLoggedIn(true);
+        setGuidedStep('logged-in-ready');
+
+        // 初始化模式
+        try {
+          const modeResult = await window.api.initMode();
+          if (modeResult.success) {
+            addMessage({
+              id: Date.now().toString() + '_mode_ok',
+              role: 'assistant',
+              content: '✅ 视频创作模式已就绪!请描述你想生成的视频。',
+              timestamp: new Date(),
+              type: 'mode-select',
+            });
+          }
+        } catch (e) {
+          console.error('模式初始化失败:', e);
+        }
+      } else {
+        // 登录失败
+        const errorMsg = loginResult.error || '登录失败';
+        const isVipError = errorMsg.includes('高级会员') || errorMsg.includes('会员');
+        addMessage({
+          id: Date.now().toString() + '_login_err',
+          role: 'assistant',
+          content: isVipError
+            ? '❌ 登录失败:即梦 CLI 需要高级会员\n\n请前往即梦网页升级会员后重试:\nhttps://jimeng.jianying.com'
+            : `❌ 登录失败:${errorMsg}`,
+          timestamp: new Date(),
+          type: 'login-error',
+          data: { isVipError, canRetry: true },
+        });
+        setGuidedStep('welcome');
+      }
     } catch (err) {
       addMessage({
         id: Date.now().toString() + '_err',
         role: 'assistant',
-        content: `❌ 打开浏览器出错: ${err}`,
+        content: `❌ 检查登录出错: ${err}`,
         timestamp: new Date(),
         type: 'error',
       });
@@ -753,11 +1201,11 @@ export function ChatPanel() {
           addMessage({
             id: Date.now().toString() + '_login_ok',
             role: 'assistant',
-            content: '✅ 登录成功！正在自动配置视频创作模式...',
+            content: '✅ 登录成功!正在自动配置视频创作模式...',
             timestamp: new Date(),
           });
 
-          // 登录后自动初始化模式（三步切换）
+          // 登录后自动初始化模式(三步切换)
           try {
             const modeResult = await window.api.initMode();
             if (modeResult.success) {
@@ -765,7 +1213,7 @@ export function ChatPanel() {
               addMessage({
                 id: Date.now().toString() + '_mode_ok',
                 role: 'assistant',
-                content: '✅ 视频创作模式已就绪（全能参考）！请描述你想生成的视频。',
+                content: '✅ 视频创作模式已就绪(全能参考)!请描述你想生成的视频。',
                 timestamp: new Date(),
                 type: 'mode-select',
               });
@@ -774,7 +1222,7 @@ export function ChatPanel() {
               addMessage({
                 id: Date.now().toString() + '_mode_warn',
                 role: 'assistant',
-                content: `⚠️ 模式自动配置遇到问题: ${modeResult.error || '未知错误'}\n你可以在浏览器中手动选择模式，然后在这里描述需求`,
+                content: `⚠️ 模式自动配置遇到问题: ${modeResult.error || '未知错误'}\n你可以在浏览器中手动选择模式,然后在这里描述需求`,
                 timestamp: new Date(),
               });
             }
@@ -819,7 +1267,7 @@ export function ChatPanel() {
           addMessage({
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `❌ ${result.error || '批量任务生成失败，请重试'}`,
+            content: `❌ ${result.error || '批量任务生成失败,请重试'}`,
             timestamp: new Date(),
             type: 'error',
           });
@@ -856,7 +1304,7 @@ export function ChatPanel() {
     }
 
     // ===== 单个任务模式 =====
-    // 构建素材信息（用于 Seedance 模式改写）
+    // 构建素材信息(用于 Seedance 模式改写)
     const materials = {
       images: [] as Array<{ type: string; name: string; path: string }>,
       videos: [] as Array<{ type: string; name: string; path: string }>,
@@ -880,7 +1328,7 @@ export function ChatPanel() {
     });
 
     const hasFiles = selectedFiles.length > 0;
-    const fileListDesc = hasFiles 
+    const fileListDesc = hasFiles
       ? [...materials.images, ...materials.videos, ...materials.audios].map(m => m.name).join('、')
       : '';
 
@@ -915,13 +1363,40 @@ export function ChatPanel() {
         addMessage({
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `❌ ${result.error || 'AI 改写失败，请重试'}`,
+          content: `❌ ${result.error || 'AI 改写失败,请重试'}`,
           timestamp: new Date(),
           type: 'error',
         });
         setGuidedStep('logged-in-ready');
+      } else if ((result as any).needsClarification) {
+        // 追问场景：多素材 + 模糊需求
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '🤔 你上传了多个素材，我需要确认一下：',
+          timestamp: new Date(),
+          type: 'clarification',
+          data: {
+            questions: (result as any).questions,
+            materials: (result as any).materials,
+          },
+        });
+        // 保存推断结果，待用户回答后使用
+        setPendingTask({
+          ...result.task,
+          materials: (result as any).materials,
+          userInput: userMsg.content,
+        });
       } else {
-        setPendingTask(result.task);
+        // Bug 2 修复：pendingTask 需保存 materials
+        setPendingTask({
+          ...result.task,
+          materials: materials,
+          selectedModel,
+          selectedDuration,
+          selectedRatio,
+          hasFiles,
+        });
         setGuidedStep('task-confirming');
         addMessage({
           id: (Date.now() + 1).toString(),
@@ -959,6 +1434,10 @@ export function ChatPanel() {
   async function handleConfirmTask() {
     if (!pendingTask) return;
 
+    // Bug 1 修复：先保存副本，再清空 state
+    const filesToSubmit = [...selectedFiles];
+    const hasFiles = filesToSubmit.length > 0 && useStructuredFlow;
+
     addMessage({
       id: Date.now().toString() + '_confirm',
       role: 'user',
@@ -972,10 +1451,9 @@ export function ChatPanel() {
     setSelectedFiles([]);
 
     try {
-      const hasFiles = selectedFiles.length > 0 && useStructuredFlow;
 
       if (hasFiles) {
-        const materials: TaskMaterial[] = selectedFiles.map(f => ({
+        const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
           type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : 'image') as 'image' | 'video',
         }));
@@ -993,7 +1471,7 @@ export function ChatPanel() {
           addMessage({
             id: Date.now().toString() + '_submitted',
             role: 'assistant',
-            content: `✅ 结构化任务已提交！\n模型: ${selectedModel} | 时长: ${selectedDuration}s | 比例: ${selectedRatio}\n素材: ${selectedFiles.length} 个文件\n结果会自动展示。`,
+            content: `✅ 结构化任务已提交!\n模型: ${selectedModel} | 时长: ${selectedDuration}s | 比例: ${selectedRatio}\n素材: ${filesToSubmit.length} 个文件\n结果会自动展示。`,
             timestamp: new Date(),
           });
         } else {
@@ -1012,7 +1490,7 @@ export function ChatPanel() {
           addMessage({
             id: Date.now().toString() + '_submitted',
             role: 'assistant',
-            content: `✅ 任务已提交！即梦正在生成中，结果会自动展示。\n\n你可以继续描述下一个需求。`,
+            content: `✅ 任务已提交!即梦正在生成中,结果会自动展示。\n\n你可以继续描述下一个需求。`,
             timestamp: new Date(),
           });
         } else {
@@ -1053,7 +1531,7 @@ export function ChatPanel() {
     addMessage({
       id: Date.now().toString() + '_retry',
       role: 'assistant',
-      content: '好的，请重新描述你的需求',
+      content: '好的,请重新描述你的需求',
       timestamp: new Date(),
     });
   }
@@ -1102,7 +1580,7 @@ export function ChatPanel() {
         throw new Error(createResult.error || '创建批量任务失败');
       }
 
-      setStatusText('🚀 批量任务已创建，正在启动...');
+      setStatusText('🚀 批量任务已创建,正在启动...');
       const startResult = await window.api.startBatch();
       if (!startResult.success) {
         throw new Error(startResult.error || '启动批量任务失败');
@@ -1111,7 +1589,7 @@ export function ChatPanel() {
       addMessage({
         id: Date.now().toString() + '_batch_started',
         role: 'assistant',
-        content: `🚀 批量任务已启动！共 ${batchData.tasks.length} 个任务，正在逐个提交...\n\n结果会自动展示。`,
+        content: `🚀 批量任务已启动!共 ${batchData.tasks.length} 个任务,正在逐个提交...\n\n结果会自动展示。`,
         timestamp: new Date(),
       });
     } catch (err) {
@@ -1140,40 +1618,60 @@ export function ChatPanel() {
 
   // Listen for progress events
   useEffect(() => {
+    console.log('[前端] 注册 onProgress 监听器');
     const removeProgress = window.api.onProgress((data) => {
-      if (data.event === 'result') {
-        const item = data.data;
-        if (item?.url) {
-          useStore.getState().addResult(item);
-          // Save to history
-          useStore.getState().addHistory({
-            id: `hist_${Date.now()}_${item.id?.slice(-6) || Math.random().toString(36).slice(2, 8)}`,
-            prompt: item.prompt || '',
-            model: '',
-            duration: 0,
-            resultUrl: item.url,
-            thumbnailUrl: item.thumbUrl,
-            createdAt: Date.now(),
-            status: 'completed',
-          });
-          // Update usage
-          const usage = useStore.getState().usage;
-          useStore.getState().updateUsage({
-            totalTasks: usage.totalTasks + 1,
-            completedTasks: usage.completedTasks + 1,
-            todayTasks: usage.todayTasks + 1,
-          });
-          const icon = item.generateType === 'video' ? '🎬' : '🖼️';
+      console.log('[前端] 收到事件:', data.event);
+
+      if (data.event === 'login-success') {
+        // 登录成功,直接更新状态
+        console.log('[前端] 处理 login-success');
+        useStore.getState().setIsLoggedIn(true);
+        useStore.getState().setGuidedStep('logged-in-ready');
+        // 清除 QR 码消息
+        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+        addMessage({
+          id: Date.now().toString() + '_login_ok',
+          role: 'assistant',
+          content: '✅ 登录成功!',
+          timestamp: new Date(),
+        });
+        return;
+      }
+
+      if (data.event === 'login-qr-ready') {
+        const qrBase64 = data.data?.qrBase64;
+        if (qrBase64) {
           addMessage({
-            id: Date.now().toString() + '_done',
+            id: Date.now().toString() + '_qr',
             role: 'assistant',
-            content: `${icon} 作品完成！\n${item.prompt?.slice(0, 60) || '生成成功'}`,
+            content: '请用抖音 APP 扫描下方二维码登录:',
             timestamp: new Date(),
-            type: 'result',
-            data: item,
+            type: 'qr-code',
+            data: { qrBase64 },
           });
         }
-      } else if (data.event === 'download') {
+        return;
+      }
+
+      if (data.event === 'login-failed') {
+        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+        const errorMsg = data.data?.error || '登录失败';
+        const isVipError = errorMsg.includes('高级会员') || errorMsg.includes('会员');
+        addMessage({
+          id: Date.now().toString() + '_login_err',
+          role: 'assistant',
+          content: isVipError
+            ? '❌ 登录失败:即梦 CLI 需要高级会员\n\n请前往即梦网页升级会员后重试:\nhttps://jimeng.jianying.com'
+            : `❌ 登录失败:${errorMsg}`,
+          timestamp: new Date(),
+          type: 'login-error',
+          data: { isVipError, canRetry: true },
+        });
+        setGuidedStep('welcome');
+        return;
+      }
+
+      if (data.event === 'result') {
         addMessage({
           id: Date.now().toString() + '_dl',
           role: 'system',
@@ -1201,9 +1699,66 @@ export function ChatPanel() {
         addMessage({
           id: Date.now().toString() + '_bc',
           role: 'assistant',
-          content: `📦 批量任务完成！\n✅ ${succeeded} 成功 / ❌ ${failed} 失败 / 共 ${total} 个任务`,
+          content: `📦 批量任务完成!\n✅ ${succeeded} 成功 / ❌ ${failed} 失败 / 共 ${total} 个任务`,
           timestamp: new Date(),
         });
+      } else if (data.event === 'login-qr-ready') {
+        // 显示 QR 码
+        const qrBase64 = data.data?.qrBase64;
+        if (qrBase64) {
+          addMessage({
+            id: Date.now().toString() + '_qr',
+            role: 'assistant',
+            content: '请用抖音 APP 扫描下方二维码登录:',
+            timestamp: new Date(),
+            type: 'qr-code',
+            data: { qrBase64 },
+          });
+        }
+      } else if (data.event === 'login-success') {
+        // 登录成功,清除 QR 码消息,继续流程
+        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+        addMessage({
+          id: Date.now().toString() + '_login_ok',
+          role: 'assistant',
+          content: '✅ 登录成功!正在初始化...',
+          timestamp: new Date(),
+        });
+        useStore.getState().setIsLoggedIn(true);
+        // 初始化模式
+        window.api.initMode().then((modeResult) => {
+          if (modeResult.success) {
+            setGuidedStep('logged-in-ready');
+            addMessage({
+              id: Date.now().toString() + '_mode_ok',
+              role: 'assistant',
+              content: '✅ 视频创作模式已就绪!请描述你想生成的视频。',
+              timestamp: new Date(),
+              type: 'mode-select',
+            });
+          } else {
+            setGuidedStep('logged-in-ready');
+          }
+        });
+      } else if (data.event === 'login-failed') {
+        // 登录失败,显示错误原因和解决方案
+        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+        const errorMsg = data.data?.error || '登录失败';
+
+        // 检测是否是会员限制
+        const isVipError = errorMsg.includes('高级会员') || errorMsg.includes('会员');
+
+        addMessage({
+          id: Date.now().toString() + '_login_err',
+          role: 'assistant',
+          content: isVipError
+            ? '❌ 登录失败:即梦 CLI 需要高级会员\n\n请前往即梦网页升级会员后重试:\nhttps://jimeng.jianying.com'
+            : `❌ 登录失败:${errorMsg}`,
+          timestamp: new Date(),
+          type: 'login-error',
+          data: { isVipError, canRetry: true },
+        });
+        setGuidedStep('welcome');
       }
     });
     return () => removeProgress();
@@ -1213,6 +1768,8 @@ export function ChatPanel() {
     const { files } = await window.api.selectFiles();
     if (files?.length) {
       setSelectedFiles((prev) => [...prev, ...files]);
+      // 重构5：上传素材后自动展开参数面板
+      setShowParams(true);
       // Save to material library
       const { addMaterial } = useStore.getState();
       files.forEach((f: string) => {
@@ -1305,6 +1862,33 @@ export function ChatPanel() {
               {statusText || getStepDescription(guidedStep)}
             </p>
           </div>
+          {/* 模式切换按钮 - 已登录后显示 */}
+          {['logged-in-ready', 'batch-collecting', 'batch-confirming', 'task-drafting', 'task-confirming'].includes(guidedStep) && (
+            <div className="flex items-center gap-1.5 ml-4 px-2.5 py-1 bg-surface-2 rounded-lg border border-border-subtle">
+              <span className="text-xs text-text-secondary">
+                {taskMode === 'batch' ? '📦 批量模式' : '📄 单个模式'}
+              </span>
+              <button
+                onClick={() => {
+                  setGuidedStep('logged-in-ready');
+                  addMessage({
+                    id: Date.now().toString() + '_mode_switch',
+                    role: 'assistant',
+                    content: '',
+                    timestamp: new Date(),
+                    type: 'mode-select',
+                  });
+                }}
+                className="text-[10px] text-brand hover:text-brand-light hover:underline transition-colors"
+              >
+                切换
+              </button>
+            </div>
+          )}
+        </div>
+        {/* 进度可视化 */}
+        <div className="text-xs text-text-secondary">
+          {getProgressText(guidedStep)}
         </div>
       </header>
 
@@ -1326,6 +1910,8 @@ export function ChatPanel() {
                   task={msg.type === 'ai-rewrite' ? msg.data : undefined}
                   onDurationChange={setSelectedDuration}
                   onRatioChange={setSelectedRatio}
+                  onModelChange={setSelectedModel}
+                  onEditMaterial={handleEditMaterial}
                 />
               </div>
             ))}
@@ -1457,14 +2043,29 @@ export function ChatPanel() {
             </button>
           </div>
           <p className="text-[10px] text-text-disabled mt-2 text-center">
-            支持描述视频需求 · 上传参考图/视频 · ⚙️ 结构化模式（带素材时自动启用）
+            支持描述视频需求 · 上传参考图/视频 · ⚙️ 结构化模式(带素材时自动启用)
           </p>
         </div>
       )}
 
-      {/* Prompt Templates */}
-      {showInputArea && (
-        <PromptTemplates onSelect={(prompt) => { setInput(prompt); textareaRef.current?.focus(); }} />
+      {/* Prompt Templates - 重构5: 点击按钮弹出 */}
+      {showInputArea && showTemplates && (
+        <div className="px-6 py-3 border-t border-border-subtle flex-shrink-0 animate-fade-in-up">
+          <PromptTemplates onSelect={(prompt) => { setInput(prompt); textareaRef.current?.focus(); setShowTemplates(false); }} />
+        </div>
+      )}
+      {/* 模板按钮 */}
+      {showInputArea && !showTemplates && (
+        <div className="px-6 py-2 flex-shrink-0">
+          <button
+            onClick={() => setShowTemplates(true)}
+            className="w-full py-1.5 text-xs text-text-muted hover:text-text-secondary bg-surface-1 hover:bg-surface-2 rounded-lg transition-all flex items-center justify-center gap-1.5 border border-border-subtle"
+          >
+            <Sparkles size={12} />
+            快速开始：选择预设模板
+            <ChevronDown size={12} />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1474,9 +2075,13 @@ export function ChatPanel() {
 function getStepDescription(step: GuidedStep): string {
   switch (step) {
     case 'welcome': return '等待开始';
+    case 'checking-login': return '正在检查登录状态...';
     case 'opening-browser': return '正在打开浏览器...';
     case 'waiting-login': return '等待扫码登录';
-    case 'logged-in-ready': return '就绪，等待输入';
+    case 'logged-in-ready': return '就绪,等待输入';
+    case 'mode-selecting': return '选择模式';
+    case 'batch-collecting': return '描述批量需求';
+    case 'batch-confirming': return '确认批量任务';
     case 'task-drafting': return 'AI 正在优化提示词...';
     case 'task-confirming': return '等待确认';
     case 'task-executing': return '正在执行...';
@@ -1485,8 +2090,28 @@ function getStepDescription(step: GuidedStep): string {
   }
 }
 
+// ── Progress Text (进度可视化) ──
+function getProgressText(step: GuidedStep): string {
+  const stepMap: Record<GuidedStep, { step: number; label: string }> = {
+    'welcome': { step: 1, label: '登录' },
+    'checking-login': { step: 1, label: '登录' },
+    'opening-browser': { step: 1, label: '登录' },
+    'waiting-login': { step: 1, label: '登录' },
+    'logged-in-ready': { step: 2, label: '选择模式' },
+    'mode-selecting': { step: 2, label: '选择模式' },
+    'batch-collecting': { step: 3, label: '描述需求' },
+    'batch-confirming': { step: 4, label: '确认任务' },
+    'batch-executing': { step: 5, label: '执行中' },
+    'task-drafting': { step: 3, label: '描述需求' },
+    'task-confirming': { step: 4, label: '确认任务' },
+    'task-executing': { step: 5, label: '执行中' },
+    'task-done': { step: 5, label: '完成' },
+  };
+  const info = stepMap[step] || { step: 0, label: '' };
+  return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
+
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, task, onDurationChange, onRatioChange }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -1496,11 +2121,13 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   task?: any;
   onDurationChange?: (d: number) => void;
   onRatioChange?: (r: string) => void;
+  onModelChange?: (m: string) => void;
+  onEditMaterial?: (index: number, newDesc: string) => void;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
 
-  // System messages — minimal, centered
+  // System messages - minimal, centered
   if (isSystem) {
     return (
       <div className="flex justify-center">
@@ -1530,6 +2157,88 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
     );
   }
 
+  // QR code message
+  if (msg.type === 'qr-code' && msg.data?.qrBase64) {
+    const isLoggedIn = useStore.getState().isLoggedIn;
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[85%] rounded-xl px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed mb-3">{msg.content}</p>
+          <img
+            src={msg.data.qrBase64}
+            alt="登录二维码"
+            className="w-48 h-48 mx-auto border border-border rounded-lg"
+          />
+          <p className="text-xs text-text-muted mt-2 text-center">打开抖音 APP 扫码授权</p>
+
+          {/* 取消/切换按钮 */}
+          <div className="flex items-center justify-center gap-3 mt-3">
+            <button
+              onClick={() => {
+                // 取消登录:返回 welcome 步骤,清除 QR 码消息
+                useStore.getState().setGuidedStep('welcome');
+                // 停止 polling(如果有)
+                const timer = (window as any).__loginPollTimer;
+                if (timer) clearInterval(timer);
+              }}
+              className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary bg-surface-3 hover:bg-border rounded-lg transition-all"
+            >
+              取消登录
+            </button>
+            {isLoggedIn && (
+              <button
+                onClick={() => {
+                  // 切换账号:重新触发登录流程
+                  useStore.getState().setGuidedStep('checking-login');
+                  // 重新调用 handleReady
+                }}
+                className="px-3 py-1.5 text-xs text-brand hover:text-brand-light bg-brand/10 hover:bg-brand/20 rounded-lg transition-all"
+              >
+                切换账号
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Login error message
+  if (msg.type === 'login-error') {
+    const isVipError = msg.data?.isVipError;
+    const canRetry = msg.data?.canRetry;
+
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[85%] rounded-xl px-4 py-3 bg-surface-2 border border-error/30 text-text-primary">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+
+          {isVipError && (
+            <a
+              href="https://jimeng.jianying.com"
+              target="_blank"
+              className="inline-flex items-center gap-1 mt-3 text-xs text-brand hover:text-brand-light transition-colors"
+            >
+              前往即梦网页升级会员 →
+            </a>
+          )}
+
+          {canRetry && (
+            <button
+              onClick={() => {
+                // 清除错误消息,重新开始登录
+                useStore.getState().setGuidedStep('welcome');
+              }}
+              className="mt-3 px-4 py-2 text-xs rounded-lg bg-surface-3 hover:bg-surface-1 border border-border-subtle transition-colors"
+            >
+              重新登录
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Mode select card
   if (msg.type === 'mode-select') {
     return (
@@ -1543,7 +2252,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
               useStore.getState().addMessage({
                 id: Date.now().toString() + '_batch_question',
                 role: 'assistant',
-                content: '好的，批量任务模式。请告诉我：\n\n1. 这次批量测试的目标是什么？\n2. 你想生成多少个视频？\n3. 每个视频的测试重点分别是什么？',
+                content: '好的,批量任务模式。请告诉我:\n\n1. 这次批量测试的目标是什么?\n2. 你想生成多少个视频?\n3. 每个视频的测试重点分别是什么?',
                 timestamp: new Date(),
               });
             } else {
@@ -1551,7 +2260,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
               useStore.getState().addMessage({
                 id: Date.now().toString() + '_single_ready',
                 role: 'assistant',
-                content: '好的，单个任务模式。请描述你想生成的视频。',
+                content: '好的,单个任务模式。请描述你想生成的视频。',
                 timestamp: new Date(),
               });
             }
@@ -1573,10 +2282,82 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           onConfirm={onConfirm || (() => {})}
           onEdit={onEdit || (() => {})}
           onTaskEdit={(index) => {
-            // TODO: 实现任务编辑
             console.log('Edit task', index);
           }}
+          onTaskDelete={(index) => {
+            console.log('Delete task', index);
+          }}
+          onBack={() => console.log('Back')}
         />
+      </div>
+    );
+  }
+
+  // Clarification card (追问卡片)
+  if (msg.type === 'clarification' && (msg.data as any)?.questions) {
+    const data = msg.data as any;
+    return (
+      <div className="flex justify-start">
+        <div className="bg-surface-2 border border-accent/30 rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
+          <div className="h-1 bg-accent-gradient flex-shrink-0" />
+          <div className="p-4">
+            <p className="text-xs text-accent font-medium mb-3 flex items-center gap-1.5">
+              <span>🤔</span> 请确认素材用途
+            </p>
+            
+            {/* 显示推断的素材列表 */}
+            <div className="mb-3">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">已上传素材</p>
+              <div className="flex flex-wrap gap-2">
+                {(data.materials || []).map((m: any, i: number) => (
+                  <MaterialTag
+                    key={i}
+                    material={m}
+                    index={i}
+                    onEdit={(newDesc) => onEditMaterial?.(i, newDesc)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 追问问题 */}
+            <div className="space-y-3">
+              {(data.questions || []).map((q: any) => (
+                <div key={q.id}>
+                  <p className="text-xs text-text-primary mb-2">{q.text}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {q.options.map((opt: any) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          // TODO: 保存用户选择，重新生成提示词
+                          console.log('User selected:', q.id, opt.value);
+                        }}
+                        className="px-3 py-1.5 text-xs bg-surface-3 hover:bg-border text-text-secondary rounded-lg transition-all"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 确认按钮 */}
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  // TODO: 根据用户选择重新生成提示词
+                  console.log('User confirmed clarification');
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand-gradient text-white text-xs font-medium rounded-lg transition-all"
+              >
+                <CheckCircle size={14} />
+                确认并生成
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1596,6 +2377,8 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           materials={(task as any).materials}
           onDurationChange={onDurationChange}
           onRatioChange={onRatioChange}
+          onModelChange={onModelChange}
+          onEditMaterial={onEditMaterial}
         />
       </div>
     );

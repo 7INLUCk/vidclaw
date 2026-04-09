@@ -5,7 +5,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress';
+  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'clarification';
   data?: any;
 }
 
@@ -32,8 +32,6 @@ export interface QueueTask {
 export interface Settings {
   downloadDir: string;
   autoDownload: boolean;
-  apiKey: string;
-  model: string;
 }
 
 // 结构化任务的素材
@@ -112,6 +110,7 @@ export interface UploadResult {
 export interface TaskRecord {
   id: string;
   prompt: string;
+  type?: 'video' | 'image';
   status: 'pending' | 'uploading' | 'queued' | 'generating' | 'completed' | 'failed' | 'downloaded';
   progress?: number;        // 0-100
   queuePosition?: number;
@@ -178,6 +177,7 @@ export interface UsageStats {
 // 引导式流程步骤
 export type GuidedStep =
   | 'welcome'           // 初始欢迎，等用户确认
+  | 'checking-login'    // 正在检查登录状态
   | 'opening-browser'   // 正在打开浏览器
   | 'waiting-login'     // 等待用户扫码登录
   | 'logged-in-ready'   // 登录成功，等用户描述需求
@@ -217,7 +217,7 @@ interface AppState {
   settingsLoaded: boolean;
 
   // UI 状态
-  activePanel: 'chat' | 'results' | 'settings' | 'history';
+  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'results';
 
   // 批量任务状态
   taskMode: TaskMode;
@@ -247,6 +247,10 @@ interface AppState {
   previewUrl: string | null;
   setPreviewUrl: (url: string | null) => void;
 
+  // 编辑任务状态
+  editingTaskIndex: number | null;
+  setEditingTaskIndex: (index: number | null) => void;
+
   // Actions
   setAppState: (state: 'loading' | 'ready') => void;
   setStatusMsg: (msg: string) => void;
@@ -254,6 +258,7 @@ interface AppState {
   setIsLoggedIn: (loggedIn: boolean | null) => void;
   setGuidedStep: (step: GuidedStep) => void;
   addMessage: (msg: Message) => void;
+  setMessages: (updater: (prev: Message[]) => Message[]) => void;
   setSubmitting: (submitting: boolean) => void;
   setStatusText: (text: string) => void;
   setResults: (results: ResultItem[]) => void;
@@ -262,7 +267,7 @@ interface AppState {
   setQueueTasks: (tasks: QueueTask[]) => void;
   setProcessingQueue: (processing: boolean) => void;
   setSettings: (settings: Partial<Settings>) => void;
-  setActivePanel: (panel: 'chat' | 'results' | 'settings' | 'history') => void;
+  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'results') => void;
   // 批量任务 Actions
   setTaskMode: (mode: TaskMode) => void;
   setBatchTasks: (tasks: BatchTaskItem[]) => void;
@@ -307,8 +312,6 @@ export const useStore = create<AppState>((set) => ({
   settings: {
     downloadDir: '',
     autoDownload: false,
-    apiKey: '',
-    model: 'xiaomi/mimo-v2-pro',
   },
   settingsLoaded: false,
 
@@ -378,12 +381,17 @@ export const useStore = create<AppState>((set) => ({
   previewUrl: null,
   setPreviewUrl: (previewUrl) => set({ previewUrl }),
 
+  // 编辑任务状态
+  editingTaskIndex: null,
+  setEditingTaskIndex: (editingTaskIndex) => set({ editingTaskIndex }),
+
   setAppState: (appState) => set({ appState }),
   setStatusMsg: (statusMsg) => set({ statusMsg }),
   setBrowserReady: (browserReady) => set({ browserReady }),
   setIsLoggedIn: (isLoggedIn) => set({ isLoggedIn }),
   setGuidedStep: (guidedStep) => set({ guidedStep }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+  setMessages: (updater) => set((s) => ({ messages: updater(s.messages) })),
   setSubmitting: (isSubmitting) => set({ isSubmitting }),
   setStatusText: (statusText) => set({ statusText }),
   setResults: (results) => set({ results }),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { ChatPanel } from './components/ChatPanel';
-import { TaskPanel } from './components/TaskPanel';
+import { QueuePanel } from './components/QueuePanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
@@ -59,6 +59,9 @@ declare global {
       updateBatchTask: (taskId: string, updates: any) => Promise<{ success: boolean; task?: any; error?: string }>;
       deleteBatchTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
       sendTaskNotify: (task: { id: string; prompt: string }) => Promise<void>;
+      checkCredits: () => Promise<{ success: boolean; isLoggedIn?: boolean; credits?: number; error?: string }>;
+      authLogin: () => Promise<{ success: boolean; qrPath?: string; message?: string; error?: string }>;
+      authLogout: () => Promise<{ success: boolean; error?: string }>;
     };
   }
 }
@@ -160,7 +163,7 @@ export default function App() {
         <main className="flex-1 flex min-w-0">
           <div className="flex-1 flex flex-col min-w-0">
             {activePanel === 'chat' && <ChatPanel />}
-            {activePanel === 'results' && <TaskPanel />}
+            {activePanel === 'queue' && <QueuePanel />}
             {activePanel === 'history' && <HistoryPanel />}
             {activePanel === 'settings' && <SettingsPanel />}
           </div>

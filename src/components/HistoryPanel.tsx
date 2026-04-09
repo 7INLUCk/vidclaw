@@ -138,7 +138,7 @@ function HistoryCard({ item, onPreview }: { item: HistoryItem; onPreview: (url: 
 export function HistoryPanel() {
   const { history, setPreviewUrl } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'video' | 'image'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'completed' | 'failed'>('all');
 
   const filteredHistory = useMemo(() => {
     let items = history;
@@ -146,8 +146,11 @@ export function HistoryPanel() {
       const q = searchQuery.toLowerCase();
       items = items.filter(h => h.prompt.toLowerCase().includes(q));
     }
+    if (filterType === 'completed') {
+      items = items.filter(h => h.status === 'completed' || h.status === 'downloaded');
+    }
     return items;
-  }, [history, searchQuery]);
+  }, [history, searchQuery, filterType]);
 
   const grouped = useMemo(() => groupByDate(filteredHistory), [filteredHistory]);
 
@@ -167,6 +170,29 @@ export function HistoryPanel() {
           </span>
         </div>
       </header>
+
+      {/* Tab Filter */}
+      <div className="px-5 py-2 border-b border-border-subtle flex-shrink-0">
+        <div className="flex gap-1">
+          {[
+            { key: 'all', label: '全部' },
+            { key: 'completed', label: '已完成' },
+            { key: 'failed', label: '失败' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setFilterType(tab.key as any)}
+              className={`px-3 py-1 text-xs rounded-md transition-all ${
+                filterType === tab.key
+                  ? 'bg-brand text-white'
+                  : 'bg-surface-2 text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Search bar */}
       <div className="px-5 py-2.5 border-b border-border-subtle flex-shrink-0">

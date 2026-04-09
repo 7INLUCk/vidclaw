@@ -1,6 +1,6 @@
 {
   "name": "vidclaw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "VidClaw - \u672c\u5730\u684c\u9762\u7248",
   "main": "electron/main.js",
   "scripts": {
@@ -63,7 +63,8 @@
     "files": [
       "electron/**/*",
       "dist/renderer/**/*",
-      "package.json"
+      "package.json",
+      "resources/**/*"
     ],
     "mac": {
       "target": [

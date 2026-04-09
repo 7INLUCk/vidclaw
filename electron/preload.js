@@ -1,7 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  // 浏览器控制
+  // 账号管理
+  checkCredits: () => ipcRenderer.invoke('account:credits'),
+  authLogin: () => ipcRenderer.invoke('auth:login'),
+  authRelogin: () => ipcRenderer.invoke('auth:relogin'),
+  authLogout: () => ipcRenderer.invoke('auth:logout'),
+
+  // 浏览器控制（已废弃，保留接口兼容）
   launchBrowser: () => ipcRenderer.invoke('browser:launch'),
   checkLogin: () => ipcRenderer.invoke('browser:check-login'),
   clickLogin: () => ipcRenderer.invoke('browser:click-login'),

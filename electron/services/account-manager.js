@@ -9,8 +9,22 @@ const https = require('https');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
+const { app } = require('electron');
 
 const JIMENG_BASE = 'https://jimeng.jianying.com';
+
+// 即梦 CLI 路径（开发模式 vs 生产模式）
+function getDreaminaBin() {
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    return path.join(process.env.HOME, '.local', 'bin', 'dreamina');
+  }
+  const platform = process.platform;
+  const arch = process.arch;
+  const ext = platform === 'win32' ? '.exe' : '';
+  const binName = `dreamina-${platform}-${arch}${ext}`;
+  return path.join(process.resourcesPath, binName);
+}
 
 /**
  * 从 storage-state.json 读取 jimeng 的 cookie 字符串
@@ -119,7 +133,7 @@ class AccountManager {
    * 使用即梦官方 CLI (dreamina user_credit)
    */
   async getCredits() {
-    const DREAMINA_BIN = path.join(process.env.HOME, '.local', 'bin', 'dreamina');
+    const DREAMINA_BIN = getDreaminaBin();
     try {
       const { stdout } = await execFileAsync(DREAMINA_BIN, ['user_credit'], { timeout: 15000 });
       const raw = JSON.parse(stdout.trim());

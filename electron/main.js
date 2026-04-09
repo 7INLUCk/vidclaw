@@ -2,12 +2,27 @@ const { app, BrowserWindow, ipcMain, dialog, Notification } = require('electron'
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
-// 即梦 CLI 路径
-const DREAMINA_BIN = path.join(process.env.HOME, '.local', 'bin', 'dreamina');
+// 即梦 CLI 路径（开发模式 vs 生产模式）
+function getDreaminaBin() {
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    // 开发模式：使用本地安装的 dreamina
+    return path.join(process.env.HOME, '.local', 'bin', 'dreamina');
+  }
+  // 生产模式：使用打包进 resources 的二进制
+  const platform = process.platform;
+  const arch = process.arch;
+  const ext = platform === 'win32' ? '.exe' : '';
+  const binName = `dreamina-${platform}-${arch}${ext}`;
+  return path.join(process.resourcesPath, binName);
+}
+
+const DREAMINA_BIN = getDreaminaBin();
+console.log('[CLI] 即梦 CLI 路径:', DREAMINA_BIN);
 
 // CLI 调用辅助函数
 async function callDreamina(args, timeout = 30000) {
@@ -128,6 +143,33 @@ function waitForVite(port, maxWait = 15000) {
 }
 
 async function createWindow() {
+  // 检测 CLI 是否存在
+  if (!fs.existsSync(DREAMINA_BIN)) {
+    const errorMsg = isDev 
+      ? `即梦 CLI 未安装，请先安装: npm install -g @jimeng/dreamina`
+      : `程序配置缺失，请重新安装 VidClaw`;
+    
+    console.error('[CLI] 错误:', errorMsg);
+    
+    mainWindow = new BrowserWindow({
+      width: 500,
+      height: 300,
+      title: 'VidClaw - 配置错误',
+      backgroundColor: '#030712',
+      resizable: false,
+    });
+    
+    mainWindow.loadURL(`data:text/html,
+      <html><body style="background:#030712;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui">
+        <div style="text-align:center;padding:20px">
+          <h2 style="margin-bottom:16px">❌ 配置错误</h2>
+          <p style="color:#888;line-height:1.6">${errorMsg}</p>
+        </div>
+      </body></html>
+    `);
+    return;
+  }
+  
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 850,
@@ -146,7 +188,7 @@ async function createWindow() {
     const viteReady = await waitForVite(5173);
     if (viteReady) {
       await mainWindow.loadURL('http://localhost:5173');
-      mainWindow.webContents.openDevTools();
+      // DevTools 默认关闭，用户可用快捷键 Cmd+Option+I 打开
     } else {
       mainWindow.loadURL(`data:text/html,
         <html><body style="background:#030712;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">
@@ -173,8 +215,7 @@ async function createWindow() {
     }
   }
 
-  mainWindow.webContents.openDevTools();
-  
+  // DevTools 默认关闭
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('✅ 页面加载完成');
   });
@@ -187,8 +228,17 @@ async function createWindow() {
 // ===== 推送事件到渲染进程 =====
 function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, data);
+    try {
+      mainWindow.webContents.send(channel, data);
+      console.log('[sendToRenderer] ✅ 已发送:', channel, data.event);
+      return true;
+    } catch (err) {
+      console.error('[sendToRenderer] ❌ 发送失败:', err.message);
+      return false;
+    }
   }
+  console.warn('[sendToRenderer] ❌ mainWindow 不可用');
+  return false;
 }
 
 // ===== Mac 原生通知 =====
@@ -304,25 +354,87 @@ function stopPolling(submitId) {
 // ===== IPC Handlers =====
 function registerIpcHandlers() {
 
-  // ---- 登录（CLI 方式）----
+  // ---- 登录（CLI 方式，spawn 实时监听 QR 码）----
   ipcMain.handle('auth:login', async () => {
     console.log('[登录] 开始 headless 登录...');
-    sendToRenderer('task:progress', { event: 'login-start', data: { message: '正在登录...' } });
+    sendToRenderer('task:progress', { event: 'login-start', data: { message: '正在启动登录...' } });
     
-    const result = await callDreamina(['login', '--headless'], 60000);
-    
-    if (result.success) {
-      const data = parseCliJson(result.stdout);
-      if (data && data.login_success) {
-        console.log('[登录] ✅ 登录成功');
-        sendToRenderer('task:progress', { event: 'login-success', data: { message: '登录成功' } });
-        return { success: true };
-      }
-    }
-    
-    console.warn('[登录] ❌ 登录失败:', result.error || result.stdout);
-    sendToRenderer('task:progress', { event: 'login-failed', data: { error: result.error || '登录失败' } });
-    return { success: false, error: result.error || '登录失败' };
+    return new Promise((resolve) => {
+      const child = spawn(DREAMINA_BIN, ['login', '--headless'], {
+        cwd: path.dirname(DREAMINA_BIN),
+        env: { ...process.env },
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      let qrPath = null;
+      
+      child.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        console.log('[登录 CLI]', text.trim());
+        
+        // 检测 QR 码路径
+        const qrMatch = text.match(/\[DREAMINA:QR_READY\]\s*(.+.png)/);
+        if (qrMatch) {
+          qrPath = qrMatch[1].trim();
+          console.log('[登录] QR 码路径:', qrPath);
+          
+          // 读取图片并转成 base64
+          try {
+            const qrBuffer = fs.readFileSync(qrPath);
+            const qrBase64 = `data:image/png;base64,${qrBuffer.toString('base64')}`;
+            sendToRenderer('task:progress', { 
+              event: 'login-qr-ready', 
+              data: { qrBase64 } 
+            });
+          } catch (err) {
+            console.error('[登录] 读取 QR 码失败:', err.message);
+            sendToRenderer('task:progress', { 
+              event: 'login-qr-error', 
+              data: { error: '二维码加载失败' } 
+            });
+          }
+        }
+        
+        // 检测登录成功
+        if (text.includes('"login_success":true') || text.includes('LOGIN_SUCCESS')) {
+          console.log('[登录] ✅ 登录成功');
+          const sent = sendToRenderer('task:progress', { event: 'login-success', data: { message: '登录成功' } });
+          console.log('[登录] sendToRenderer 返回:', sent);
+          resolve({ success: true });
+        }
+        
+        // 检测登录复用（已有登录态）
+        if (text.includes('LOGIN_REUSED')) {
+          console.log('[登录] ✅ 复用已有登录态');
+          sendToRenderer('task:progress', { event: 'login-success', data: { message: '已登录' } });
+          resolve({ success: true, reused: true });
+        }
+      });
+      
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0 && stdout.includes('login_success')) {
+          // 已在上面处理
+        } else if (code !== 0) {
+          console.warn('[登录] ❌ 登录失败:', stderr || stdout);
+          sendToRenderer('task:progress', { event: 'login-failed', data: { error: stderr || '登录失败' } });
+          resolve({ success: false, error: stderr || '登录失败' });
+        }
+      });
+      
+      // 超时保护
+      setTimeout(() => {
+        if (!child.killed) {
+          child.kill();
+          resolve({ success: false, error: '登录超时' });
+        }
+      }, 120000);
+    });
   });
 
   ipcMain.handle('auth:relogin', async () => {
@@ -336,15 +448,24 @@ function registerIpcHandlers() {
     return { success: false, error: result.error };
   });
 
-  // ---- 积分查询（CLI 方式，已实现）----
+  ipcMain.handle('auth:logout', async () => {
+    console.log('[登出] 清除本地登录态...');
+    const result = await callDreamina(['logout'], 10000);
+    return { success: result.success, message: '已清除登录态' };
+  });
+
+  // ---- 积分查询（CLI 方式，验证登录态）----
   ipcMain.handle('account:credits', async () => {
     const result = await callDreamina(['user_credit'], 15000);
     
     if (result.success) {
       const data = parseCliJson(result.stdout);
-      if (data) {
+      if (data && data.total_credit !== undefined) {
+        // 成功获取积分 = 已登录
         return {
           success: true,
+          isLoggedIn: true,
+          credits: data.total_credit || 0,
           data: {
             vipCredit: data.vip_credit || 0,
             giftCredit: data.gift_credit || 0,
@@ -354,7 +475,8 @@ function registerIpcHandlers() {
         };
       }
     }
-    return { success: false, error: result.error || '积分查询失败' };
+    // 积分查询失败 = 未登录或网络问题
+    return { success: false, isLoggedIn: false, error: result.error || '未登录' };
   });
 
   // ---- 新：两步任务提交 —— Step 1: AI 改写（不执行） ----
