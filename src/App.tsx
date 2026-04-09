@@ -42,6 +42,7 @@ declare global {
       onLoginRequired: (callback: () => void) => () => void;
       onLoginDetected: (callback: () => void) => () => void;
       onNotificationClick: (callback: (data: { taskId: string }) => void) => () => void;
+      onNotificationClickV2: (callback: (data: { taskId: string; submitId: string }) => void) => () => void;
       navigateToGenerate: () => Promise<{ success: boolean; error?: string }>;
       switchToSeedanceMode: () => Promise<{ success: boolean; mode?: string; error?: string }>;
       selectModel: (model: string) => Promise<{ success: boolean; model?: string; label?: string; error?: string }>;
@@ -118,10 +119,19 @@ export default function App() {
       store.setHighlightedTaskId(taskId);
     });
 
+    const removeNotificationClickV2 = window.api.onNotificationClickV2?.(({ taskId, submitId }: { taskId: string; submitId: string }) => {
+      console.log('[通知点击] taskId:', taskId, 'submitId:', submitId);
+      const store = useStore.getState();
+      store.setActivePanel('results');
+      if (taskId) store.setHighlightedTaskId(taskId);
+      // 如果有 submitId，也可以用它来定位任务
+    });
+
     return () => {
       removeLogin();
       removeLoginDetected();
       removeNotificationClick?.();
+      removeNotificationClickV2?.();
     };
   }, []);
 

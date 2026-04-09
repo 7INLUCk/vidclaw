@@ -241,15 +241,58 @@ function sendToRenderer(channel, data) {
   return false;
 }
 
-// ===== Mac 原生通知 =====
+// ===== Mac 原生通知（增强版） =====
+const NOTIFICATION_ICON = path.join(__dirname, '../resources/icon.png');
+
 function sendTaskNotification(task) {
   if (!Notification.isSupported()) return;
+  console.log('[通知] 发送单个任务通知:', task.prompt?.slice(0, 30));
   const notif = new Notification({
     title: 'VidClaw',
     body: `✅ 「${(task.prompt || '').slice(0, 20)}」已生成完成`,
     silent: false,
+    icon: fs.existsSync(NOTIFICATION_ICON) ? NOTIFICATION_ICON : undefined,
   });
   notif.show();
+  notif.on('click', () => {
+    console.log('[通知] 点击通知，跳转到应用');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      // 发送事件让前端高亮该任务
+      sendToRenderer('notification:click', { taskId: task.id, submitId: task.submitId });
+    }
+  });
+}
+
+// 批量任务完成汇总通知
+function sendBatchCompleteNotification(summary) {
+  if (!Notification.isSupported()) return;
+  const { succeeded, failed, total, batch } = summary;
+  console.log(`[通知] 发送批量完成通知: ${succeeded}成功/${failed}失败`);
+  
+  const body = failed > 0
+    ? `批量任务完成: ${succeeded}个成功, ${failed}个失败`
+    : `批量任务完成: ${total}个视频已生成`;
+  const notif = new Notification({
+    title: 'VidClaw - 批量任务',
+    body,
+    silent: false,
+    icon: fs.existsSync(NOTIFICATION_ICON) ? NOTIFICATION_ICON : undefined,
+  });
+  notif.show();
+  notif.on('click', () => {
+    console.log('[通知] 点击批量通知，跳转到应用');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      // 打开批次目录
+      if (batch?.downloadDir && fs.existsSync(batch.downloadDir)) {
+        const { shell } = require('electron');
+        shell.openPath(batch.downloadDir);
+      }
+    }
+  });
 }
 
 // ===== AI 服务（DeepSeek 改写，保留） =====

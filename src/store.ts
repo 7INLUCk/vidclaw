@@ -112,10 +112,11 @@ export interface TaskRecord {
   prompt: string;
   type?: 'video' | 'image';
   status: 'pending' | 'uploading' | 'queued' | 'generating' | 'completed' | 'failed' | 'downloaded';
-  progress?: number;        // 0-100
+  progress?: number;
   queuePosition?: number;
   estimatedMinutes?: number;
-  taskId?: string;          // 即梦返回的任务 ID
+  taskId?: string;
+  submitId?: string;
   model: string;
   duration: number;
   materials: Array<{ path: string; type: string; storeUri?: string }>;
@@ -123,9 +124,12 @@ export interface TaskRecord {
   localPath?: string;
   thumbnailUrl?: string;
   error?: string;
-  createdAt: number;        // timestamp
+  createdAt: number;
   completedAt?: number;
   retryCount: number;
+  startTime?: number;
+  filePath?: string;
+  downloaded?: boolean;
 }
 
 export type TaskFilter = 'all' | 'active' | 'completed' | 'failed';
@@ -278,6 +282,8 @@ interface AppState {
   updateTask: (id: string, updates: Partial<TaskRecord>) => void;
   removeTask: (id: string) => void;
   retryTask: (id: string) => void;
+  deleteTask: (id: string) => void;
+  downloadTask: (id: string) => void;
   setFilter: (filter: TaskFilter) => void;
   setHighlightedTaskId: (id: string | null) => void;
   // 作品历史 Actions
@@ -486,6 +492,23 @@ export const useStore = create<AppState>((set) => ({
     try { localStorage.setItem('vidclaw_tasks', JSON.stringify(tasks)); } catch {}
     return { tasks };
   }),
+  deleteTask: (id) => set((s) => {
+    const tasks = s.tasks.filter(t => t.id !== id);
+    try { localStorage.setItem('vidclaw_tasks', JSON.stringify(tasks)); } catch {}
+    return { tasks };
+  }),
+  downloadTask: async (id) => {
+    const task = useStore.getState().tasks.find(t => t.id === id);
+    if (!task?.submitId) return;
+    try {
+      const result = await window.api.downloadTask({ submitId: task.submitId });
+      if (result.success && result.filepath) {
+        useStore.getState().updateTask(id, { filePath: result.filepath, downloaded: true, status: 'downloaded' });
+      }
+    } catch (e) {
+      console.error('[downloadTask] 失败:', e);
+    }
+  },
   setFilter: (activeTaskFilter) => set({ activeTaskFilter }),
   setHighlightedTaskId: (highlightedTaskId) => set({ highlightedTaskId }),
 }));

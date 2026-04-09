@@ -97,4 +97,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('notification-click', handler);
     return () => ipcRenderer.removeListener('notification-click', handler);
   },
+  // 新增：notification:click 事件
+  onNotificationClickV2: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('notification:click', handler);
+    return () => ipcRenderer.removeListener('notification:click', handler);
+  },
 });
