@@ -412,7 +412,7 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
                 setCurrentStep(currentStep + 1);
               } else {
                 onDismiss();
-                useStore.getState().setGuidedStep(isVip ? 'logged-in-ready' : 'welcome');
+                useStore.getState().setGuidedStep('welcome');
               }
             }}
             className="flex-1 py-2 bg-brand hover:bg-brand-gradient text-white text-sm font-medium rounded-lg transition-all"

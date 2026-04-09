@@ -148,9 +148,9 @@ export default function App() {
 
   if (appState === 'loading') {
     return (
-      <div className="flex items-center justify-center h-screen bg-surface-0 text-white">
+      <div className="flex items-center justify-center h-screen bg-[var(--color-background)] text-white">
         <div className="text-center">
-          <div className="w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-lg)] animate-glow">
+          <div className="w-10 h-10 rounded-xl bg-[var(--color-brand)] flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-sm)] animate-glow">
             <PawPrint size={20} strokeWidth={2.2} className="text-white" />
           </div>
           <div className="relative w-6 h-6 mx-auto mb-3">
@@ -165,7 +165,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen bg-surface-0 text-white">
+      <div className="flex h-screen bg-[var(--color-background)] text-white">
         {/* Left sidebar */}
         <Sidebar />
 
@@ -180,7 +180,7 @@ export default function App() {
 
           {/* Batch task panel (right) */}
           {taskMode === 'batch' && batchTasks.length > 0 && showBatchPanel && (
-            <div className="w-80 border-l border-border shrink-0">
+            <div className="w-80 border-l border-[var(--color-border)] shrink-0">
               <BatchTaskPanel />
             </div>
           )}
@@ -190,7 +190,7 @@ export default function App() {
         {taskMode === 'batch' && batchTasks.length > 0 && (
           <button
             onClick={() => setShowBatchPanel(!showBatchPanel)}
-            className="fixed bottom-4 right-4 p-2 bg-brand text-white rounded-full shadow-lg hover:shadow-xl transition-all"
+            className="fixed bottom-4 right-4 p-2 bg-[var(--color-brand)] text-white rounded-full shadow-[var(--shadow-lg)] hover:shadow-[var(--shadow-lg)] transition-all"
             title={showBatchPanel ? '隐藏任务面板' : '显示任务面板'}
           >
             {showBatchPanel ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
