@@ -7,9 +7,9 @@ import { PromptTemplates } from './PromptTemplates';
 // ── Mode Select Card (选择单个/批量) ──
 function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
   return (
-    <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
-      {/* Top accent band - 重构：改为顶部边条 */}
-      <div className="h-1 bg-accent-gradient flex-shrink-0" />
+    <div className="bg-surface-2 border border-border rounded-md overflow-hidden max-w-[85%] animate-fade-in-up">
+      {/* Top accent band */}
+      <div className="h-px bg-brand flex-shrink-0" />
       <div className="p-4">
           <p className="text-xs text-accent font-medium mb-3 flex items-center gap-1.5">
             <span>🎯</span> 选择任务模式
@@ -17,7 +17,7 @@ function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => onSelect('single')}
-              className="flex flex-col items-center gap-2 p-4 bg-surface-3 hover:bg-border rounded-xl transition-all hover:-translate-y-0.5"
+              className="flex flex-col items-center gap-2 p-4 bg-surface-3 hover:bg-border rounded-md transition-all hover:-translate-y-0.5"
             >
               <FileStack size={24} className="text-brand" />
               <span className="text-sm font-medium">单个任务</span>
@@ -25,7 +25,7 @@ function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
             </button>
             <button
               onClick={() => onSelect('batch')}
-              className="flex flex-col items-center gap-2 p-4 bg-surface-3 hover:bg-border rounded-xl transition-all hover:-translate-y-0.5"
+              className="flex flex-col items-center gap-2 p-4 bg-surface-3 hover:bg-border rounded-md transition-all hover:-translate-y-0.5"
             >
               <Layers size={24} className="text-accent" />
               <span className="text-sm font-medium">批量任务</span>
@@ -66,9 +66,9 @@ function BatchConfirmCard({
   const editingTask = editingTaskIndex !== null ? batchTasks[editingTaskIndex] : null;
 
   return (
-    <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[90%] animate-fade-in-up">
-      {/* Top accent band - 重构：改为顶部边条 */}
-      <div className="h-1 bg-accent-gradient flex-shrink-0" />
+    <div className="bg-surface-2 border border-border rounded-md overflow-hidden max-w-[90%] animate-fade-in-up">
+      {/* Top accent band */}
+      <div className="h-px bg-brand flex-shrink-0" />
       <div className="p-4 max-h-[400px] overflow-y-auto">
           <p className="text-xs text-accent font-medium mb-2 flex items-center gap-1.5">
             <span>📦</span> 批量任务确认
@@ -155,7 +155,7 @@ function BatchConfirmCard({
           {/* 任务列表 */}
           <div className="space-y-2 mb-4">
             {batchTasks.map((task, i) => (
-              <div key={task.id} className={`bg-surface-3 rounded-lg p-3 ${editingTaskIndex === i ? 'ring-1 ring-brand' : ''}`}>
+              <div key={task.id} className={`bg-surface-3 rounded-md p-3 ${editingTaskIndex === i ? 'ring-1 ring-brand' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-text-primary mb-1">
@@ -201,7 +201,7 @@ function BatchConfirmCard({
           <div className="flex items-center gap-2">
             <button
               onClick={onConfirm}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white text-xs font-medium rounded-lg transition-all hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 text-white text-xs font-medium rounded-md transition-all hover:-translate-y-0.5"
             >
               <CheckCircle size={14} />
               确认全部提交
@@ -238,7 +238,7 @@ function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void
     <div className="flex flex-col items-center justify-center h-full px-8 animate-fade-in">
       <div className="max-w-md w-full text-center">
         {/* Logo + Title */}
-        <div className="w-14 h-14 rounded-2xl bg-brand-gradient flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-lg)]">
+        <div className="w-14 h-14 rounded-md bg-brand flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand)]">
           <Sparkles size={24} className="text-white" />
         </div>
         <h2 className="text-lg font-semibold text-text-primary mb-1.5">VidClaw - 说人话,出视频</h2>
@@ -250,7 +250,7 @@ function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void
             <button
               key={i}
               onClick={() => onPromptClick(prompt)}
-              className="w-full text-left px-4 py-3 bg-surface-2 hover:bg-surface-3 border border-border-subtle hover:border-border rounded-xl text-sm text-text-secondary hover:text-text-primary transition-all duration-150 group"
+              className="w-full text-left px-4 py-3 bg-surface-2 hover:bg-surface-3 border border-border-subtle hover:border-border rounded-md text-sm text-text-secondary hover:text-text-primary transition-all duration-150 group"
             >
               <span className="text-text-muted mr-2 text-xs">{i + 1}.</span>
               {prompt}
@@ -280,7 +280,7 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
       title: '认识 VidClaw',
       content: (
         <div className="text-center">
-          <div className="w-20 h-20 rounded-2xl bg-brand-gradient flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand-lg)]">
+          <div className="w-20 h-20 rounded-md bg-brand flex items-center justify-center mx-auto mb-5 shadow-[var(--shadow-brand)]">
             <Sparkles size={32} className="text-white" />
           </div>
           <h4 className="text-lg font-semibold text-text-primary mb-2">说人话，出视频</h4>
@@ -313,7 +313,7 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
             <div className="flex gap-2">
               <button
                 onClick={() => window.api.authLogin?.()}
-                className="flex-1 py-2 bg-brand hover:bg-brand-gradient text-white text-sm rounded-lg transition-all"
+                className="flex-1 py-2 bg-brand hover:bg-brand/90 text-white text-sm rounded-md transition-all"
               >
                 扫码登录
               </button>
@@ -373,7 +373,7 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-overlay-in">
-      <div className="bg-surface-1 border border-border rounded-2xl p-6 max-w-md w-full mx-4 shadow-[var(--shadow-elevated)] animate-card-pop">
+      <div className="bg-surface-1 border border-border rounded-md p-6 max-w-md w-full mx-4 shadow-[var(--shadow-elevated)] animate-card-pop">
         {/* 进度指示器 */}
         <div className="flex items-center justify-center gap-2 mb-4">
           {steps.map((_, i) => (
@@ -415,7 +415,7 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
                 useStore.getState().setGuidedStep('welcome');
               }
             }}
-            className="flex-1 py-2 bg-brand hover:bg-brand-gradient text-white text-sm font-medium rounded-lg transition-all"
+            className="flex-1 py-2 bg-brand hover:bg-brand/90 text-white text-sm font-medium rounded-md transition-all"
           >
             {currentStep < steps.length - 1 ? '下一步' : '开始使用'}
           </button>
@@ -441,7 +441,7 @@ function ProgressMessage({ msg }: { msg: Message }) {
   if (progressType === 'uploading') {
     return (
       <div className="flex justify-start animate-fade-in">
-        <div className="bg-surface-2 border border-border-subtle rounded-xl px-4 py-3 max-w-xs">
+        <div className="bg-surface-2 border border-border-subtle rounded-md px-4 py-3 max-w-xs">
           <div className="flex items-center gap-2.5">
             <ArrowUp size={16} className="text-brand animate-upload-bounce" />
             <span className="text-xs text-text-secondary">{msg.content || '正在上传素材...'}</span>
@@ -454,7 +454,7 @@ function ProgressMessage({ msg }: { msg: Message }) {
   if (progressType === 'completed') {
     return (
       <div className="flex justify-start animate-fade-in">
-        <div className="bg-success/10 border border-success/20 rounded-xl px-4 py-3 max-w-xs">
+        <div className="bg-success/10 border border-success/20 rounded-md px-4 py-3 max-w-xs">
           <div className="flex items-center gap-2.5">
             <CheckCircle size={16} className="text-success animate-check-pop" />
             <span className="text-xs text-success font-medium">{msg.content || '生成完成'}</span>
@@ -467,7 +467,7 @@ function ProgressMessage({ msg }: { msg: Message }) {
   if (progressType === 'failed') {
     return (
       <div className="flex justify-start animate-fade-in">
-        <div className="bg-error/10 border border-error/20 rounded-xl px-4 py-3 max-w-xs animate-shake">
+        <div className="bg-error/10 border border-error/20 rounded-md px-4 py-3 max-w-xs animate-shake">
           <div className="flex items-center gap-2.5 mb-2">
             <AlertTriangle size={16} className="text-error" />
             <span className="text-xs text-error font-medium">{msg.content || '生成失败'}</span>
@@ -487,7 +487,7 @@ function ProgressMessage({ msg }: { msg: Message }) {
   // Default: generating
   return (
     <div className="flex justify-start animate-fade-in">
-      <div className="bg-surface-2 border border-border-subtle rounded-xl px-4 py-3 max-w-xs">
+      <div className="bg-surface-2 border border-border-subtle rounded-md px-4 py-3 max-w-xs">
         <div className="flex items-center gap-2.5">
           <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
           <span className="text-xs text-text-secondary">{msg.content || '正在生成...'}</span>
@@ -588,7 +588,7 @@ function ParamChip({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-// ── Guide Button (gradient + hover animation) ──
+// ── Guide Button ──
 function GuideButton({ label, onClick, disabled, icon }: {
   label: string;
   onClick: () => void;
@@ -599,7 +599,7 @@ function GuideButton({ label, onClick, disabled, icon }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-gradient hover:shadow-[var(--shadow-brand-lg)] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0"
+      className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0"
     >
       {icon}
       {label}
@@ -644,9 +644,9 @@ function ConfirmCard({
   ];
 
   return (
-    <div className="bg-surface-2 border border-border rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
-      {/* Top accent band - 重构：改为顶部边条 */}
-      <div className="h-1 bg-brand-gradient flex-shrink-0" />
+    <div className="bg-surface-2 border border-border rounded-md overflow-hidden max-w-[85%] animate-fade-in-up">
+      {/* Top accent band */}
+      <div className="h-px bg-brand flex-shrink-0" />
       <div className="p-4">
           <p className="text-xs text-brand font-medium mb-2 flex items-center gap-1.5">
             <span>✨</span> AI 优化后的提示词
@@ -655,7 +655,7 @@ function ConfirmCard({
 
           {/* 改写理由 */}
           {task.reason && (
-            <p className="text-xs text-text-secondary mb-3 bg-surface-3 rounded-lg px-3 py-2 border-l-2 border-accent">
+            <p className="text-xs text-text-secondary mb-3 bg-surface-3 rounded-md px-3 py-2">
               💡 <span className="font-medium">改写理由:</span>{task.reason}
             </p>
           )}
@@ -793,7 +793,7 @@ function ConfirmCard({
               className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 ${
                 hasFiles && !paramsConfirmed
                   ? 'bg-surface-3 text-text-muted cursor-not-allowed'
-                  : 'bg-brand hover:bg-brand-gradient hover:shadow-[var(--shadow-brand)] text-white hover:-translate-y-0.5'
+                  : 'bg-brand hover:bg-brand/90 text-white hover:-translate-y-0.5'
               }`}
             >
               <CheckCircle size={14} />
@@ -1887,7 +1887,7 @@ export function ChatPanel() {
 
             {isSubmitting && (
               <div className="flex justify-start animate-fade-in">
-                <div className="bg-surface-2 border border-border-subtle rounded-xl px-4 py-3 max-w-xs">
+                <div className="bg-surface-2 border border-border-subtle rounded-md px-4 py-3 max-w-xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
                     <span className="text-xs text-text-muted">{isAiThinking ? 'AI 正在思考...' : (statusText || '处理中...')}</span>
@@ -1997,7 +1997,7 @@ export function ChatPanel() {
                 onKeyDown={canInput ? handleKeyDown : undefined}
                 placeholder={canInput ? '描述你想生成的视频... 按 Enter 发送' : '请先完成当前步骤...'}
                 rows={1}
-                className="w-full bg-surface-1 border border-border rounded-xl px-4 py-3 text-sm text-text-primary placeholder-text-muted resize-none focus-brand transition-all duration-200"
+                className="w-full bg-surface-1 border border-border rounded-md px-4 py-3 text-sm text-text-primary placeholder-text-muted resize-none focus-brand transition-all duration-200"
                 style={{ maxHeight: '120px' }}
                 disabled={!canInput}
               />
@@ -2006,7 +2006,7 @@ export function ChatPanel() {
             <button
               onClick={handleSend}
               disabled={!input.trim() || !canInput}
-              className="p-3 rounded-xl bg-brand-gradient hover:shadow-[var(--shadow-brand)] disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all duration-150 flex-shrink-0 hover:-translate-y-0.5 active:translate-y-0"
+              className="p-3 rounded-md bg-brand hover:bg-brand/90 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all duration-150 flex-shrink-0 hover:-translate-y-0.5 active:translate-y-0"
             >
               <Send size={16} />
             </button>
@@ -2116,7 +2116,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   if (msg.type === 'guide-button' && onGuideClick) {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-xl px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
           <div className="mt-3">
             <GuideButton label="准备好了" onClick={onGuideClick} />
@@ -2127,16 +2127,17 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   }
 
   // QR code message
+  // QR code message
   if (msg.type === 'qr-code' && msg.data?.qrBase64) {
     const isLoggedIn = useStore.getState().isLoggedIn;
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-xl px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed mb-3">{msg.content}</p>
           <img
             src={msg.data.qrBase64}
             alt="登录二维码"
-            className="w-48 h-48 mx-auto border border-border rounded-lg"
+            className="w-48 h-48 mx-auto border border-border rounded-md"
           />
           <p className="text-xs text-text-muted mt-2 text-center">打开抖音 APP 扫码授权</p>
 
@@ -2179,7 +2180,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
 
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-xl px-4 py-3 bg-surface-2 border border-error/30 text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-error/30 text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
 
           {isVipError && (
@@ -2267,8 +2268,8 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
     const data = msg.data as any;
     return (
       <div className="flex justify-start">
-        <div className="bg-surface-2 border border-accent/30 rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
-          <div className="h-1 bg-accent-gradient flex-shrink-0" />
+        <div className="bg-surface-2 border border-accent/30 rounded-md overflow-hidden max-w-[85%] animate-fade-in-up">
+          <div className="h-px bg-accent flex-shrink-0" />
           <div className="p-4">
             <p className="text-xs text-accent font-medium mb-3 flex items-center gap-1.5">
               <span>🤔</span> 请确认素材用途
@@ -2319,7 +2320,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
                   // TODO: 根据用户选择重新生成提示词
                   console.log('User confirmed clarification');
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand-gradient text-white text-xs font-medium rounded-lg transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 text-white text-xs font-medium rounded-md transition-all"
               >
                 <CheckCircle size={14} />
                 确认并生成
@@ -2357,9 +2358,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-xl px-4 py-3 transition-all ${
+        className={`max-w-[85%] rounded-md px-4 py-3 transition-all ${
           isUser
-            ? 'bg-brand-gradient text-white shadow-[var(--shadow-brand)]'
+            ? 'bg-brand text-white'
             : msg.type === 'error'
             ? 'bg-error/10 text-error border border-error/20'
             : 'bg-surface-2 border border-border-subtle text-text-primary'

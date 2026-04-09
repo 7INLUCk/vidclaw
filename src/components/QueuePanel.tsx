@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { Loader2, Clock, Film, Image as ImageIcon, CheckCircle, XCircle, AlertTriangle, Trash2, RefreshCw, Download, Play } from 'lucide-react';
 import { useStore, type TaskRecord } from '../store';
 
@@ -15,13 +15,13 @@ function estimateRemainingTime(progress: number, startTime: number): string {
 }
 
 const statusColor: Record<string, string> = {
-  pending: 'oklch(0.65 0.02 260)',
-  queued: 'oklch(0.75 0.16 75)',
-  generating: 'oklch(0.65 0.25 270)',
-  uploading: 'oklch(0.65 0.25 270)',
-  completed: 'oklch(0.60 0.18 145)',
-  downloaded: 'oklch(0.60 0.18 145)',
-  failed: 'oklch(0.55 0.22 25)',
+  pending: 'text-text-muted',
+  queued: 'text-warning',
+  generating: 'text-brand',
+  uploading: 'text-brand',
+  completed: 'text-success',
+  downloaded: 'text-success',
+  failed: 'text-error',
 };
 
 const statusLabel: Record<string, string> = {
@@ -64,23 +64,23 @@ export function QueuePanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Tab 切换 */}
-      <div className="px-4 pt-4 pb-2 border-b border-border-subtle">
-        <div className="flex items-center gap-2">
+      <div className="px-3 pt-3 pb-2 border-b border-border-subtle">
+        <div className="flex items-center gap-1.5">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                 filter === tab.key
                   ? 'bg-brand text-white'
-                  : 'bg-surface-2 text-text-secondary hover:bg-surface-3 hover:text-text-primary'
+                  : 'bg-transparent text-text-secondary hover:bg-surface-2 hover:text-text-primary'
               }`}
             >
               {tab.icon}
               <span>{tab.label}</span>
               {tab.count > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                  filter === tab.key ? 'bg-white/20' : 'bg-surface-3'
+                <span className={`px-1 py-0.5 rounded text-[10px] ${
+                  filter === tab.key ? 'bg-white/20' : 'bg-surface-2'
                 }`}>
                   {tab.count}
                 </span>
@@ -91,11 +91,11 @@ export function QueuePanel() {
       </div>
 
       {/* 任务列表 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto px-3 py-2">
         {filteredTasks.length === 0 ? (
           <EmptyState filter={filter} />
         ) : (
-          <div className="max-w-2xl mx-auto space-y-3">
+          <div className="space-y-2">
             {filteredTasks.map(task => (
               <TaskCard key={task.id} task={task} />
             ))}
@@ -108,20 +108,21 @@ export function QueuePanel() {
 
 function EmptyState({ filter }: { filter: FilterType }) {
   const messages: Record<FilterType, { title: string; subtitle: string; icon: React.ReactNode }> = {
-    active: { title: '队列为空', subtitle: '新任务会在这里显示', icon: <Loader2 size={32} className="text-text-muted" /> },
-    completed: { title: '暂无已完成任务', subtitle: '完成的任务会在这里展示', icon: <CheckCircle size={32} className="text-success/40" /> },
-    failed: { title: '暂无失败任务', subtitle: '失败的任务会在这里记录', icon: <XCircle size={32} className="text-error/40" /> },
-    all: { title: '暂无任务', subtitle: '开始创作吧', icon: <Film size={32} className="text-text-muted" /> },
-  };const msg = messages[filter];
+    active: { title: '队列为空', subtitle: '新任务会在这里显示', icon: <Loader2 size={20} className="text-text-muted" /> },
+    completed: { title: '暂无已完成任务', subtitle: '完成的任务会在这里展示', icon: <CheckCircle size={20} className="text-success/40" /> },
+    failed: { title: '暂无失败任务', subtitle: '失败的任务会在这里记录', icon: <XCircle size={20} className="text-error/40" /> },
+    all: { title: '暂无任务', subtitle: '开始创作吧', icon: <Film size={20} className="text-text-muted" /> },
+  };
+  const msg = messages[filter];
 
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="text-center py-12">
-        <div className="w-20 h-20 rounded-2xl bg-surface-2/50 flex items-center justify-center mx-auto mb-4 border border-border-subtle">
+      <div className="text-center py-8">
+        <div className="w-12 h-12 rounded-md bg-surface-2 flex items-center justify-center mx-auto mb-3">
           {msg.icon}
         </div>
         <p className="text-text-primary text-sm font-medium">{msg.title}</p>
-        <p className="text-text-muted text-xs mt-2">{msg.subtitle}</p>
+        <p className="text-text-muted text-xs mt-1">{msg.subtitle}</p>
       </div>
     </div>
   );
@@ -137,79 +138,72 @@ function TaskCard({ task }: { task: TaskRecord }) {
   const remainingTime = isGenerating && progress > 0 ? estimateRemainingTime(progress, startTime) : '';
 
   return (
-    <div className={`bg-surface-1 border rounded-xl p-4 transition-all ${
-      isCompleted ? 'border-success/20' :
-      isFailed ? 'border-error/20' :
+    <div className={`bg-surface-1 border rounded-md p-3 transition-colors ${
+      isCompleted ? 'border-success/30' :
+      isFailed ? 'border-error/30' :
       'border-border'
     }`}>
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
         {/* Icon */}
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+        <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
           isCompleted ? 'bg-success/10' :
           isFailed ? 'bg-error/10' :
           'bg-surface-2'
         }`}>
           {task.type === 'image' ? (
-            <ImageIcon size={18} className={isFailed ? 'text-error' : 'text-text-muted'} />
+            <ImageIcon size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
           ) : (
-            <Film size={18} className={isFailed ? 'text-error' : 'text-text-muted'} />
+            <Film size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-text-primary line-clamp-2">{task.prompt}</p>
+          <p className="text-sm text-text-primary line-clamp-2 leading-tight">{task.prompt}</p>
 
-          {/* Status */}
-          <div className="flex items-center gap-2 mt-2">
+          {/* Status row */}
+          <div className="flex items-center gap-1.5 mt-1.5">
             {isGenerating && <Loader2 size={12} className="animate-spin text-brand" />}
             {isCompleted && <CheckCircle size={12} className="text-success" />}
             {isFailed && <AlertTriangle size={12} className="text-error" />}
-            <span
-              className="text-xs font-medium"
-              style={{ color: statusColor[task.status] }}
-            >
+            <span className={`text-xs font-medium ${statusColor[task.status]}`}>
               {statusLabel[task.status]}
             </span>
             {isGenerating && progress > 0 && (
               <>
                 <span className="text-xs text-text-muted">{progress}%</span>
                 {remainingTime && (
-                  <span className="text-xs text-text-muted flex items-center gap-1">
+                  <span className="text-xs text-text-muted flex items-center gap-0.5">
                     <Clock size={10} />
-                    约{remainingTime}
+                    {remainingTime}
                   </span>
                 )}
               </>
             )}
             {isFailed && task.error && (
-              <span className="text-xs text-error/70 truncate max-w-[200px]">{task.error}</span>
+              <span className="text-xs text-error/70 truncate max-w-[180px]">{task.error}</span>
             )}
           </div>
 
-          {/* Progress bar (增强版) */}
+          {/* Progress bar */}
           {isGenerating && progress > 0 && (
-            <div className="mt-3">
-              <div className="h-2 bg-surface-3 rounded-full overflow-hidden">
+            <div className="mt-2">
+              <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-brand transition-all duration-300"
+                  className="h-full bg-brand transition-all"
                   style={{ width: `${progress}%` }}
                 />
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-[10px] text-text-muted">进度</span>
-                <span className="text-[10px] text-brand font-medium">{progress}%</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* 操作按钮 */}
-        <div className="flex flex-col gap-1 flex-shrink-0">
+        {/* Actions */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           {isFailed && (
             <button
               onClick={() => retryTask?.(task.id)}
-              className="p-1.5 rounded-lg bg-surface-2 hover:bg-brand/20 hover:text-brand transition-colors"
+              className="p-1 rounded-md hover:bg-brand/15 hover:text-brand text-text-muted transition-colors"
               title="重试"
             >
               <RefreshCw size={14} />
@@ -218,7 +212,7 @@ function TaskCard({ task }: { task: TaskRecord }) {
           {isCompleted && !task.downloaded && task.filePath && (
             <button
               onClick={() => downloadTask?.(task.id)}
-              className="p-1.5 rounded-lg bg-surface-2 hover:bg-success/20 hover:text-success transition-colors"
+              className="p-1 rounded-md hover:bg-success/15 hover:text-success text-text-muted transition-colors"
               title="下载"
             >
               <Download size={14} />
@@ -229,16 +223,16 @@ function TaskCard({ task }: { task: TaskRecord }) {
             return (
               <button
                 onClick={() => window.api.openFile?.(filePath)}
-                className="p-1.5 rounded-lg bg-surface-2 hover:bg-brand/20 hover:text-brand transition-colors"
-                title="打开文件"
-              >
-                <Play size={14} />
-              </button>
+              className="p-1 rounded-md hover:bg-brand/15 hover:text-brand text-text-muted transition-colors"
+              title="打开文件"
+            >
+              <Play size={14} />
+            </button>
             );
           })()}
           <button
             onClick={() => deleteTask?.(task.id)}
-            className="p-1.5 rounded-lg bg-surface-2 hover:bg-error/20 hover:text-error transition-colors"
+            className="p-1 rounded-md hover:bg-error/15 hover:text-error text-text-muted transition-colors"
             title="删除"
           >
             <Trash2 size={14} />
