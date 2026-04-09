@@ -1058,6 +1058,76 @@ export function ChatPanel() {
     });
   }
 
+  async function handleConfirmBatch(batchData: any) {
+    if (!batchData?.tasks?.length) return;
+
+    addMessage({
+      id: Date.now().toString() + '_batch_confirm',
+      role: 'user',
+      content: `确认批量提交 (${batchData.tasks.length} 个任务)`,
+      timestamp: new Date(),
+    });
+
+    setSubmitting(true);
+    setGuidedStep('task-executing');
+    setStatusText('⏳ 正在创建批量任务...');
+
+    try {
+      const batch = {
+        id: 'batch_' + Date.now(),
+        name: batchData.batchName || '批量任务',
+        description: batchData.description || '',
+        totalTasks: batchData.tasks.length,
+        completedTasks: 0,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        downloadDir: '',
+      };
+
+      const tasks = batchData.tasks.map((t: any, i: number) => ({
+        id: `task_${Date.now()}_${i}`,
+        index: i,
+        prompt: t.prompt || '',
+        reason: t.reason || '',
+        materials: [],
+        expectedEffect: t.expectedEffect || '',
+        duration: t.duration || 5,
+        aspectRatio: t.aspectRatio || '9:16',
+        model: t.model || 'seedance2.0fast',
+        status: 'pending' as const,
+      }));
+
+      const createResult = await window.api.createBatch(batch, tasks);
+      if (!createResult.success) {
+        throw new Error(createResult.error || '创建批量任务失败');
+      }
+
+      setStatusText('🚀 批量任务已创建，正在启动...');
+      const startResult = await window.api.startBatch();
+      if (!startResult.success) {
+        throw new Error(startResult.error || '启动批量任务失败');
+      }
+
+      addMessage({
+        id: Date.now().toString() + '_batch_started',
+        role: 'assistant',
+        content: `🚀 批量任务已启动！共 ${batchData.tasks.length} 个任务，正在逐个提交...\n\n结果会自动展示。`,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      addMessage({
+        id: Date.now().toString() + '_batch_fail',
+        role: 'assistant',
+        content: `❌ 批量任务失败: ${err}`,
+        timestamp: new Date(),
+        type: 'error',
+      });
+    } finally {
+      setSubmitting(false);
+      setStatusText('');
+    }
+  }
+
   function handleRetry() {
     if (!lastPrompt) return;
     setInput(lastPrompt);
@@ -1250,7 +1320,7 @@ export function ChatPanel() {
                   msg={msg}
                   onDownload={msg.type === 'result' && msg.data ? () => handleDownload(msg.data) : undefined}
                   onGuideClick={msg.type === 'guide-button' && guidedStep === 'welcome' ? handleReady : undefined}
-                  onConfirm={msg.type === 'ai-rewrite' && msg.data && guidedStep === 'task-confirming' ? handleConfirmTask : undefined}
+                  onConfirm={msg.type === 'ai-rewrite' && msg.data && guidedStep === 'task-confirming' ? handleConfirmTask : msg.type === 'batch-confirm' && msg.data ? () => handleConfirmBatch(msg.data) : undefined}
                   onEdit={msg.type === 'ai-rewrite' && msg.data && guidedStep === 'task-confirming' ? handleEditTask : undefined}
                   onRetry={msg.type === 'error' && lastPrompt ? handleRetry : undefined}
                   task={msg.type === 'ai-rewrite' ? msg.data : undefined}
