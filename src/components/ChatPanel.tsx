@@ -273,22 +273,6 @@ function EmptyState({ onPromptClick }: { onPromptClick: (prompt: string) => void
 // ── Onboarding Overlay (重构3:完善新手引导) ──
 function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; isLoggedIn: boolean }) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [checkingVip, setCheckingVip] = useState(false);
-  const [isVip, setIsVip] = useState<boolean | null>(null);
-
-  const handleCheckVip = async () => {
-    setCheckingVip(true);
-    try {
-      const result = await window.api.checkCredits();
-      const loggedIn = result.isLoggedIn ?? false;
-      setIsVip(result.success ? loggedIn : false);
-      useStore.getState().setIsLoggedIn(result.success && loggedIn);
-    } catch (e) {
-      setIsVip(false);
-    } finally {
-      setCheckingVip(false);
-    }
-  };
 
   // 三步引导内容
   const steps = [
@@ -323,49 +307,34 @@ function OnboardingOverlay({ onDismiss, isLoggedIn }: { onDismiss: () => void; i
             <p className="text-sm font-medium text-warning flex items-center gap-2 mb-2">
               <AlertTriangle size={16} /> 需要即梦高级会员
             </p>
-            <p className="text-xs text-text-muted">
+            <p className="text-xs text-text-muted mb-3">
               VidClaw 使用即梦 AI 的官方 CLI 工具，需要高级会员账号才能调用视频生成 API。
             </p>
-          </div>
-          
-          {isVip === null && !checkingVip && (
-            <button
-              onClick={handleCheckVip}
-              className="w-full py-2 bg-brand hover:bg-brand-gradient text-white text-sm rounded-lg transition-all"
-            >
-              检测会员状态
-            </button>
-          )}
-          
-          {checkingVip && (
-            <div className="flex items-center justify-center gap-2 py-2">
-              <Loader2 size={16} className="animate-spin text-brand" />
-              <span className="text-sm text-text-muted">正在检测...</span>
-            </div>
-          )}
-          
-          {isVip === true && (
-            <div className="bg-success/10 border border-success/20 rounded-lg p-3">
-              <p className="text-sm text-success flex items-center gap-2">
-                <CheckCircle size={16} /> 已检测到高级会员账号
-              </p>
-            </div>
-          )}
-          
-          {isVip === false && (
-            <div className="bg-error/10 border border-error/20 rounded-lg p-3 mb-3">
-              <p className="text-sm text-error flex items-center gap-2 mb-2">
-                <XCircle size={16} /> 未检测到高级会员
-              </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.api.authLogin?.()}
+                className="flex-1 py-2 bg-brand hover:bg-brand-gradient text-white text-sm rounded-lg transition-all"
+              >
+                扫码登录
+              </button>
               <a
                 href="https://jimeng.jianying.com"
                 target="_blank"
-                className="text-xs text-brand hover:underline"
+                className="flex-1 py-2 bg-surface-2 hover:bg-surface-3 text-text-secondary text-sm rounded-lg transition-all text-center"
               >
-                前往即梦网页升级会员
+                前往即梦网页
               </a>
             </div>
-          )}
+          </div>
+          
+          <div className="bg-surface-2 rounded-lg p-3 text-xs text-text-secondary">
+            <p className="font-medium mb-2">会员等级说明</p>
+            <ul className="space-y-1">
+              <li>• <span className="text-warning">高级会员</span>：解锁 Seedance 2.0 API</li>
+              <li>• 普通会员：仅限网页端使用</li>
+              <li>• 非会员：无法生成视频</li>
+            </ul>
+          </div>
         </div>
       ),
     },
