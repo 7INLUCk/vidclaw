@@ -1881,6 +1881,9 @@ export function ChatPanel() {
                   onRatioChange={setSelectedRatio}
                   onModelChange={setSelectedModel}
                   onEditMaterial={handleEditMaterial}
+                  setGuidedStep={setGuidedStep}
+                  setMessages={setMessages}
+                  setTaskMode={setTaskMode}
                 />
               </div>
             ))}
@@ -2080,7 +2083,7 @@ function getProgressText(step: GuidedStep): string {
   return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
 
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -2092,6 +2095,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   onRatioChange?: (r: string) => void;
   onModelChange?: (m: string) => void;
   onEditMaterial?: (index: number, newDesc: string) => void;
+  setGuidedStep?: (step: any) => void;
+  setMessages?: (fn: (prev: Message[]) => Message[]) => void;
+  setTaskMode?: (mode: any) => void;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -2257,7 +2263,13 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           onTaskDelete={(index) => {
             console.log('Delete task', index);
           }}
-          onBack={() => console.log('Back')}
+          onBack={() => {
+            // 返回到上一步，清除确认卡片，回到输入状态
+            setGuidedStep?.('logged-in-ready');
+            // 删除当前的批量确认消息
+            setMessages?.(prev => prev.filter(m => m.id !== msg.id));
+            setTaskMode?.(null);
+          }}
         />
       </div>
     );
@@ -2340,6 +2352,11 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           task={task}
           onConfirm={onConfirm}
           onEdit={onEdit!}
+          onBack={() => {
+            // 返回到编辑状态，清除确认卡片
+            setGuidedStep?.('task-drafting');
+            setMessages?.(prev => prev.filter(m => m.id !== msg.id));
+          }}
           hasFiles={(task as any).hasFiles}
           selectedModel={(task as any).selectedModel}
           selectedDuration={(task as any).selectedDuration}

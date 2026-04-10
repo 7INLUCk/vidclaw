@@ -3,6 +3,28 @@
    Dark theme optimized, Linear-inspired
    ═══════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════
+   Tailwind v4 Theme Mapping
+   ═══════════════════════════════════════════ */
+@theme {
+  /* Colors — mapped to CSS Variables */
+  --color-background: var(--color-background);
+  --color-surface-0: var(--color-background);
+  --color-surface-1: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-3: var(--color-surface-3);
+  --color-brand: var(--color-brand);
+  --color-accent: var(--color-brand);
+  --color-text-primary: var(--color-text);
+  --color-text-secondary: var(--color-text-muted);
+  --color-text-muted: var(--color-text-secondary);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+}
+
 :root {
   /* ─────────────────────────────────────────
      Color System (OKLCH)
