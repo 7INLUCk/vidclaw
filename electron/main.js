@@ -827,6 +827,7 @@ function registerIpcHandlers() {
           event: 'batch-complete',
           data: summary,
         });
+        sendBatchCompleteNotification(summary);
       });
     }
     return batchTaskManager;

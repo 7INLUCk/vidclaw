@@ -1156,6 +1156,7 @@ export function ChatPanel() {
     guidedStep, setGuidedStep,
     taskMode, setTaskMode,
     sendMode, setSendMode,
+    addTask,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -1629,29 +1630,47 @@ export function ChatPanel() {
 
     try {
       let result;
+      let taskSubmitId: string | undefined;
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
           type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image') as 'image' | 'video' | 'audio',
         }));
         setStatusText('📤 正在上传素材...');
-        result = await window.api.runStructuredTask({
+        const r = await window.api.runStructuredTask({
           prompt,
           materials,
           model: selectedModel,
           duration: selectedDuration,
           aspectRatio: selectedRatio,
         });
+        result = r;
+        taskSubmitId = (r as any).submitId;
       } else {
-        result = await window.api.executeTask({
+        const r = await window.api.executeTask({
           prompt,
           model: selectedModel,
           duration: selectedDuration,
           aspectRatio: selectedRatio,
         });
+        result = r;
+        taskSubmitId = (r as any).submitId;
       }
 
       if (result.success) {
+        addTask({
+          id: 'task_' + Date.now(),
+          submitId: taskSubmitId,
+          prompt,
+          type: 'video',
+          status: 'generating',
+          model: selectedModel,
+          duration: selectedDuration,
+          materials: [],
+          createdAt: Date.now(),
+          startTime: Date.now(),
+          retryCount: 0,
+        });
         addMessage({
           id: (Date.now() + 1).toString(),
           role: 'assistant',
@@ -1719,6 +1738,19 @@ export function ChatPanel() {
         });
 
         if (result.success) {
+          addTask({
+            id: 'task_' + Date.now(),
+            submitId: (result as any).submitId,
+            prompt: pendingTask.prompt,
+            type: 'video',
+            status: 'generating',
+            model: selectedModel,
+            duration: selectedDuration,
+            materials: [],
+            createdAt: Date.now(),
+            startTime: Date.now(),
+            retryCount: 0,
+          });
           addMessage({
             id: Date.now().toString() + '_submitted',
             role: 'assistant',
@@ -1743,6 +1775,19 @@ export function ChatPanel() {
         });
 
         if (result.success) {
+          addTask({
+            id: 'task_' + Date.now(),
+            submitId: (result as any).submitId,
+            prompt: pendingTask.prompt,
+            type: 'video',
+            status: 'generating',
+            model: selectedModel,
+            duration: selectedDuration,
+            materials: [],
+            createdAt: Date.now(),
+            startTime: Date.now(),
+            retryCount: 0,
+          });
           addMessage({
             id: Date.now().toString() + '_submitted',
             role: 'assistant',
@@ -1948,14 +1993,43 @@ export function ChatPanel() {
         return;
       }
 
+      if (data.event === 'progress' && data.data?.submitId) {
+        const found = useStore.getState().tasks.find(t => t.submitId === data.data.submitId);
+        if (found) {
+          useStore.getState().updateTask(found.id, {
+            status: 'generating',
+            progress: data.data.progress ?? 50,
+          });
+        }
+        return;
+      }
+
       if (data.event === 'result') {
+        const found = useStore.getState().tasks.find(t => t.submitId === data.data?.submitId);
+        if (found) {
+          useStore.getState().updateTask(found.id, {
+            status: 'downloaded',
+            filePath: data.data.filePath,
+            downloaded: true,
+            progress: 100,
+            completedAt: Date.now(),
+          });
+        }
         addMessage({
           id: Date.now().toString() + '_dl',
           role: 'system',
-          content: `✅ 已下载: ${data.data?.filepath?.split('/').pop()}`,
+          content: `✅ 已下载: ${data.data?.filePath?.split('/').pop()}`,
           timestamp: new Date(),
           type: 'download',
         });
+      } else if (data.event === 'failed') {
+        const found = useStore.getState().tasks.find(t => t.submitId === data.data?.submitId);
+        if (found) {
+          useStore.getState().updateTask(found.id, {
+            status: 'failed',
+            error: data.data?.error || '生成失败',
+          });
+        }
       } else if (data.event === 'queue-task-submitted') {
         addMessage({
           id: Date.now().toString() + '_qs',

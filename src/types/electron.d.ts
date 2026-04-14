@@ -17,7 +17,7 @@ declare global {
 
       // 任务（两步式）
       prepareTask: (input: string) => Promise<{ success: boolean; task?: any; error?: string }>;
-      executeTask: (task: any) => Promise<{ success: boolean; message?: string; error?: string }>;
+      executeTask: (task: any) => Promise<{ success: boolean; submitId?: string; message?: string; error?: string }>;
       prepareTaskForSeedance: (input: string, materials: { images?: any[]; videos?: any[]; audios?: any[] }) => Promise<{ success: boolean; task?: any; materials?: any; error?: string }>;
       prepareBatchTasks: (input: string, materials?: { images: any[]; videos: any[]; audios: any[] }, defaults?: { model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; batchName?: string; description?: string; tasks?: any[]; questions?: string[]; error?: string }>;
 
@@ -35,7 +35,7 @@ declare global {
 
       // 结构化任务
       submitStructured: (params: { prompt: string; materials?: any[]; metaList?: any[]; model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; taskId?: string; uploadResults?: any[]; message?: string; error?: string }>;
-      runStructuredTask: (params: { prompt: string; materials?: any[]; metaList?: any[]; model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; taskId?: string; uploadResults?: any[]; message?: string; error?: string }>;
+      runStructuredTask: (params: { prompt: string; materials?: any[]; metaList?: any[]; model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; submitId?: string; taskId?: string; uploadResults?: any[]; message?: string; error?: string }>;
       uploadMaterials: (materials: Array<{ path: string; type: 'image' | 'video' }>) => Promise<{ success: boolean; results: Array<{ path: string; type: string; success: boolean; storeUri?: string; vid?: string; error?: string }> }>;
       getModels: () => Promise<{ models: Record<string, { key: string; label: string; benefit: string }>; aspectRatios: string[] }>;
       initMode: () => Promise<{ success: boolean; error?: string }>;
