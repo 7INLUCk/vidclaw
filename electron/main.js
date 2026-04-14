@@ -944,14 +944,22 @@ if (gotTheLock) {
     // are handled natively by Chromium — required for <video> seek/playback and
     // canvas frame capture. The old registerFileProtocol callback API does not
     // support range requests, which breaks video thumbnails and preview playback.
-    const { pathToFileURL } = require('url');
-    protocol.handle('local-file', (request) => {
-      const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
-      // Forward all request headers (including Range: bytes=X-Y) so that video
-      // elements can seek and stream the file with proper 206 Partial Content responses.
-      return net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
-    });
+    // IPC handlers first — must not be blocked by protocol setup failures
     registerIpcHandlers();
+
+    // local-file:// protocol for serving local media with byte-range support.
+    // Wrapped in try/catch: on hot-reload the scheme may already be registered
+    // ("already registered" error), which must not break IPC handler setup.
+    try {
+      const { pathToFileURL } = require('url');
+      protocol.handle('local-file', (request) => {
+        const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
+        return net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
+      });
+    } catch (e) {
+      console.warn('[Protocol] local-file:// handler registration failed (may already be registered):', e.message);
+    }
+
     await createWindow();
   });
 
