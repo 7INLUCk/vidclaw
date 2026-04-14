@@ -720,10 +720,10 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
               )}
               {isVid && <VideoThumb path={file} size={W} />}
               {isAud && (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-2 relative overflow-hidden"
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 relative overflow-hidden"
                      style={{ background: 'linear-gradient(145deg, oklch(0.38 0.22 285), oklch(0.50 0.20 305))' }}>
                   {/* Waveform bars */}
-                  <div className="flex items-end gap-[3px]" style={{ height: 28 }}>
+                  <div className="flex items-end gap-[3px]" style={{ height: 24 }}>
                     {[38, 68, 50, 88, 58, 76, 40].map((h, j) => (
                       <div key={j} className="rounded-full" style={{
                         width: 3,
@@ -732,8 +732,10 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
                       }} />
                     ))}
                   </div>
+                  {/* Filename */}
+                  <span className="text-[8px] text-white/90 w-full px-1.5 text-center truncate leading-tight">{name}</span>
                   {/* Format badge */}
-                  <span className="text-[8px] font-mono font-semibold tracking-wider rounded-full px-1.5 py-px"
+                  <span className="text-[7px] font-mono font-semibold tracking-wider rounded-full px-1.5 py-px"
                         style={{ color: 'rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.18)' }}>
                     {ext}
                   </span>
@@ -2319,6 +2321,7 @@ export function ChatPanel() {
 
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
+              <PillTag label="视频生成" icon={<Video size={10} />} />
               <PillSelect
                 icon={<Zap size={10} />}
                 label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
@@ -2330,7 +2333,6 @@ export function ChatPanel() {
                 onChange={setSelectedModel}
                 disabled={!canInput}
               />
-              <PillTag label="视频生成" icon={<Video size={10} />} />
               <PillTag label="全能参考" icon={<Layers size={10} />} />
               <PillSelect
                 icon={<RectangleHorizontal size={10} />}
