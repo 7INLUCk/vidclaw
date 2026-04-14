@@ -1,4 +1,4 @@
-import { MessageSquare, Layers, Settings, Download, Clock, PawPrint } from 'lucide-react';
+import { MessageSquare, Layers, Settings, Clock, PawPrint } from 'lucide-react';
 import { useStore } from '../store';
 
 export function Sidebar() {
@@ -87,40 +87,17 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="mt-auto flex flex-col items-center gap-0.5 w-full px-1.5">
-        <button
-          onClick={() => window.api.openDownloadDir()}
-          className="w-full h-12 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 group"
+      <div className="mt-auto flex flex-col items-center gap-0.5 w-full px-1.5 pb-2">
+        {/* Version indicator */}
+        <span
+          className="font-mono"
           style={{
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--color-text-muted)'
+            fontSize: '9px',
+            color: 'var(--color-text-secondary)'
           }}
         >
-          <Download size={16} strokeWidth={1.8} />
-          <span style={{ fontSize: '10px', fontWeight: 400, lineHeight: 1 }}>下载</span>
-          
-          {/* Hover background */}
-          <span 
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity -z-10"
-            style={{
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-surface-2)'
-            }}
-          />
-        </button>
-
-        {/* Version indicator */}
-        <div className="mt-1 mb-0.5">
-          <span 
-            className="font-mono"
-            style={{
-              fontSize: '9px',
-              color: 'var(--color-text-secondary)'
-            }}
-          >
-            v0.1
-          </span>
-        </div>
+          v0.1
+        </span>
       </div>
     </aside>
   );

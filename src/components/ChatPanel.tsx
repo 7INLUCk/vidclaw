@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal, Paperclip, FolderOpen } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { PromptTemplates } from './PromptTemplates';
@@ -913,8 +913,7 @@ function ConfirmCard({
   onModelChange?: (m: string) => void;
   onEditMaterial?: (index: number, newDesc: string) => void;
 }) {
-  // 分步确认流程：参数确认状态
-  const [paramsConfirmed, setParamsConfirmed] = useState(false);
+  const [showParamEditor, setShowParamEditor] = useState(false);
   const modelLabels: Record<string, string> = {
     'seedance2.0fast': 'Seedance 2.0 Fast',
     'seedance2.0': 'Seedance 2.0',
@@ -964,124 +963,80 @@ function ConfirmCard({
             </div>
           )}
 
-          {/* 参数选择器 - 独立区块，视觉权重提升 */}
-          {hasFiles && (
-            <div className="mb-4 p-3 bg-surface-3 rounded-lg border border-border-subtle">
-              <p className="text-xs text-text-primary font-medium mb-3 flex items-center gap-1.5">
-                <span>⚙️</span> 请确认生成参数
-              </p>
-              
-              {/* 模型版本选择 */}
-              <div className="mb-3">
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">模型版本</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onModelChange?.('seedance2.0fast')}
-                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 ${
-                      selectedModel === 'seedance2.0fast' || !selectedModel
-                        ? 'bg-brand text-white'
-                        : 'bg-surface-2 text-text-secondary hover:bg-border'
-                    }`}
-                  >
-                    <span className="font-medium">Fast</span>
-                    <span className="block text-[10px] opacity-80">速度快，适合简单场景</span>
-                  </button>
-                  <button
-                    onClick={() => onModelChange?.('seedance2.0')}
-                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 ${
-                      selectedModel === 'seedance2.0'
-                        ? 'bg-brand text-white'
-                        : 'bg-surface-2 text-text-secondary hover:bg-border'
-                    }`}
-                  >
-                    <span className="font-medium">标准</span>
-                    <span className="block text-[10px] opacity-80">质量高，适合复杂场景</span>
-                  </button>
-                </div>
+          {/* 参数摘要行 + 可展开编辑 */}
+          <div className="mb-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-1 flex-wrap">
+                {[
+                  selectedModel === 'seedance2.0fast' || !selectedModel ? 'Seedance Fast' : 'Seedance 标准',
+                  selectedRatio || '9:16',
+                  `${selectedDuration || 5}s`,
+                ].map((tag) => (
+                  <span key={tag} className="px-2 py-0.5 bg-surface-3 rounded text-[10px] text-text-secondary font-mono">{tag}</span>
+                ))}
               </div>
-              
-              {/* 时长选择 */}
-              <div className="mb-3">
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">时长 <span className="text-text-secondary normal-case">(4-6s适合短视频，10-15s适合展示)</span></p>
-                <div className="grid grid-cols-6 gap-1">
-                  {durations.slice(0, 12).map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => onDurationChange?.(d)}
-                      className={`px-2 py-1 text-[11px] rounded-md transition-all ${
-                        selectedDuration === d
-                          ? 'bg-brand text-white'
-                          : 'bg-surface-2 text-text-secondary hover:bg-border'
-                      }`}
-                    >
-                      {d}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              {/* 比例选择 */}
-              <div className="mb-3">
-                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">画幅比例 <span className="text-text-secondary normal-case">(9:16=抖音竖屏，16:9=B站横屏)</span></p>
-                <div className="grid grid-cols-3 gap-1">
-                  {ratios.map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => onRatioChange?.(r)}
-                      className={`px-2 py-1 text-[11px] rounded-md transition-all ${
-                        selectedRatio === r
-                          ? 'bg-brand text-white'
-                          : 'bg-surface-2 text-text-secondary hover:bg-border'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
-              {/* 确认参数按钮 */}
-              {!paramsConfirmed && (
-                <button
-                  onClick={() => setParamsConfirmed(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-accent hover:bg-accent/90 text-white text-xs font-medium rounded-lg transition-all"
-                >
-                  <CheckCircle size={14} />
-                  确认参数并继续
-                </button>
-              )}
-              {paramsConfirmed && (
-                <p className="text-[10px] text-brand flex items-center gap-1">
-                  <CheckCircle size={12} />
-                  参数已确认
-                </p>
-              )}
+              <button
+                onClick={() => setShowParamEditor(v => !v)}
+                className="text-[11px] text-brand hover:text-brand-light transition-colors flex-shrink-0"
+              >
+                {showParamEditor ? '收起' : '修改参数'}
+              </button>
             </div>
-          )}
 
-          {/* 标签展示(无素材时) */}
-          {!hasFiles && (
-            <div className="flex items-center gap-2 text-xs text-text-secondary mb-4 flex-wrap">
-              <span className="bg-surface-3 rounded-md px-2 py-0.5 font-mono">{task.type || 'video'}</span>
-              {task.duration && <span className="bg-surface-3 rounded-md px-2 py-0.5 font-mono">{task.duration}s</span>}
-              <span className="bg-surface-3 rounded-md px-2 py-0.5 font-mono">{task.aspectRatio || '16:9'}</span>
-              {task.style && <span className="bg-surface-3 rounded-md px-2 py-0.5">{task.style}</span>}
-            </div>
-          )}
+            {showParamEditor && (
+              <div className="mt-3 p-3 bg-surface-3 rounded-lg border border-border-subtle space-y-3">
+                {/* 模型 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">模型</p>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'seedance2.0fast', label: 'Fast', desc: '速度快' },
+                      { value: 'seedance2.0', label: '标准', desc: '质量高' },
+                    ].map(m => (
+                      <button key={m.value} onClick={() => onModelChange?.(m.value)}
+                        className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 ${(selectedModel === m.value || (!selectedModel && m.value === 'seedance2.0fast')) ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        <span className="font-medium">{m.label}</span>
+                        <span className="block text-[10px] opacity-70">{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 时长 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">时长</p>
+                  <div className="grid grid-cols-6 gap-1">
+                    {durations.slice(0, 12).map(d => (
+                      <button key={d} onClick={() => onDurationChange?.(d)}
+                        className={`px-2 py-1 text-[11px] rounded-md transition-all ${selectedDuration === d ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        {d}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 比例 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">比例</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {ratios.map(r => (
+                      <button key={r} onClick={() => onRatioChange?.(r)}
+                        className={`px-2 py-1 text-[11px] rounded-md transition-all ${selectedRatio === r ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {hasFiles && (
-            <p className="text-[10px] text-accent mb-3">⚡ 结构化模式:素材将通过 API 直接上传</p>
+            <p className="text-[10px] text-accent mb-3">⚡ 结构化模式：素材将通过 API 直接上传</p>
           )}
 
           <div className="flex items-center gap-2">
             <button
               onClick={onConfirm}
-              disabled={hasFiles && !paramsConfirmed}
-              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 ${
-                hasFiles && !paramsConfirmed
-                  ? 'bg-surface-3 text-text-muted cursor-not-allowed'
-                  : 'bg-brand hover:bg-brand/90 text-white hover:-translate-y-0.5'
-              }`}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 bg-brand hover:bg-brand/90 text-white hover:-translate-y-0.5"
             >
               <CheckCircle size={14} />
               确认提交
@@ -1224,6 +1179,8 @@ export function ChatPanel() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [viewFile, setViewFile] = useState<string | null>(null);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
+  const [lastInput, setLastInput] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ── 素材描述编辑处理 ──
   function handleEditMaterial(index: number, newDesc: string) {
@@ -1285,7 +1242,7 @@ export function ChatPanel() {
       addMessage({
         id: 'welcome',
         role: 'assistant',
-        content: '你好!我是 VidClaw。先帮你打开即梦页面,准备好了吗?',
+        content: '你好，我是 VidClaw —— 用自然语言描述你想要的视频，AI 帮你生成。\n\n首先需要登录即梦账号（抖音授权）。准备好了吗？',
         timestamp: new Date(),
         type: 'guide-button',
       });
@@ -1334,7 +1291,7 @@ export function ChatPanel() {
         addMessage({
           id: Date.now().toString() + '_ready',
           role: 'assistant',
-          content: '✅ 就绪！左下角可以切换三种模式：\n✨ 智能生成 — 描述想法，AI 帮你优化成提示词\n📋 批量规划 — 描述目标，AI 自动拆解成多个任务\n⚡ 专业模式 — 自己写好提示词，直接发送\n\n默认是智能生成，描述你想生成的视频效果就行。',
+          content: '✅ 就绪，可以开始创作了！\n\n直接描述你想要的视频效果，AI 会优化提示词后生成。\n\n💡 输入框左下角可以切换模式：批量生成多个视频，或手动模式直接写提示词。',
           timestamp: new Date(),
         });
         return;
@@ -1410,7 +1367,7 @@ export function ChatPanel() {
           addMessage({
             id: Date.now().toString() + '_login_ok',
             role: 'assistant',
-            content: '✅ 登录成功！左下角可以切换三种模式：\n✨ 智能生成 — 描述想法，AI 帮你优化成提示词\n📋 批量规划 — 描述目标，AI 自动拆解成多个任务\n⚡ 专业模式 — 自己写好提示词，直接发送\n\n默认是智能生成，描述你想生成的视频效果就行。',
+            content: '✅ 登录成功，可以开始创作了！\n\n直接描述你想要的视频效果，AI 会优化提示词后生成。\n\n💡 输入框左下角可以切换模式：批量生成多个视频，或手动模式直接写提示词。',
             timestamp: new Date(),
           });
         }
@@ -1471,6 +1428,7 @@ export function ChatPanel() {
 
     addMessage(userMsg);
     setLastPrompt(input.trim());
+    setLastInput(input.trim());
     setLastFiles([...selectedFiles]);
     setInput('');
     setSubmitting(true);
@@ -1596,6 +1554,7 @@ export function ChatPanel() {
       timestamp: new Date(),
     };
     addMessage(userMsg);
+    setLastInput(input.trim());
     setInput('');
     setSelectedFiles([]);
     setSubmitting(true);
@@ -1929,7 +1888,7 @@ export function ChatPanel() {
         addMessage({
           id: Date.now().toString() + '_login_ok',
           role: 'assistant',
-          content: '✅ 登录成功!',
+          content: '✅ 登录成功，可以开始创作了！\n\n直接描述你想要的视频效果，AI 会优化提示词后生成。\n\n💡 输入框左下角可以切换模式：批量生成多个视频，或手动模式直接写提示词。',
           timestamp: new Date(),
         });
         return;
@@ -1953,7 +1912,7 @@ export function ChatPanel() {
           addMessage({
             id: Date.now().toString() + '_qr',
             role: 'assistant',
-            content: '请用抖音 APP 扫描下方二维码登录:',
+            content: '即梦 AI 使用抖音账号授权登录。请用抖音 APP 扫码，然后在 APP 内点击「确认授权」。\n\n⚠️ 需要开通即梦高级会员方可使用',
             timestamp: new Date(),
             type: 'qr-code',
             data: { qrBase64 },
@@ -2262,9 +2221,19 @@ export function ChatPanel() {
             </p>
           </div>
         </div>
-        {/* 进度可视化 */}
-        <div className="text-xs text-text-secondary">
-          {getProgressText(guidedStep)}
+        <div className="flex items-center gap-2">
+          {/* Download folder shortcut */}
+          <button
+            onClick={() => window.api.openDownloadDir()}
+            className="p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
+            title="打开下载目录"
+          >
+            <FolderOpen size={15} />
+          </button>
+          {/* 进度可视化 */}
+          <div className="text-xs text-text-secondary">
+            {getProgressText(guidedStep)}
+          </div>
         </div>
       </header>
 
@@ -2292,6 +2261,7 @@ export function ChatPanel() {
                   setGuidedStep={setGuidedStep}
                   setMessages={setMessages}
                   setTaskMode={setTaskMode}
+                  onInputRestore={() => setInput(lastInput)}
                 />
               </div>
             ))}
@@ -2318,19 +2288,20 @@ export function ChatPanel() {
         <div className="px-4 py-3 flex-shrink-0">
           <div className="rounded-xl border border-border bg-surface-2 transition-all duration-200 input-card-focus shadow-[var(--shadow-card)]">
 
-            {/* Main row: attachment stack (left, always) + textarea (right) */}
+            {/* Main row: attachment stack (only when files present) + textarea */}
             <div className="flex gap-0 p-3 pb-2" style={{ overflow: 'visible' }}>
 
-              {/* Attachment stack — always on LEFT */}
-              <div className="flex-shrink-0 mr-3 self-center" style={{ overflow: 'visible' }}>
-                <AttachmentStack
-                  files={selectedFiles}
-                  onView={setViewFile}
-                  onRemove={removeFile}
-                  onAdd={handleSelectFiles}
-                  canAdd={canAddFiles}
-                />
-              </div>
+              {selectedFiles.length > 0 && (
+                <div className="flex-shrink-0 mr-3 self-center" style={{ overflow: 'visible' }}>
+                  <AttachmentStack
+                    files={selectedFiles}
+                    onView={setViewFile}
+                    onRemove={removeFile}
+                    onAdd={handleSelectFiles}
+                    canAdd={canAddFiles}
+                  />
+                </div>
+              )}
 
               {/* Textarea */}
               <textarea
@@ -2362,6 +2333,39 @@ export function ChatPanel() {
               </div>
             )}
 
+            {/* Advanced params row (collapsible) */}
+            {showAdvanced && (
+              <div className="flex items-center gap-1.5 px-3 pt-2 flex-wrap border-t border-border-subtle">
+                <PillSelect
+                  icon={<Zap size={10} />}
+                  label={selectedModel === 'seedance_2.0_fast' ? 'Fast' : '标准'}
+                  options={[
+                    { value: 'seedance_2.0_fast', label: 'Seedance 2.0 Fast' },
+                    { value: 'seedance_2.0', label: 'Seedance 2.0' },
+                  ]}
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                  disabled={!canInput}
+                />
+                <PillSelect
+                  icon={<RectangleHorizontal size={10} />}
+                  label={selectedRatio}
+                  options={['9:16','16:9','1:1','4:3','3:4','21:9'].map(r => ({ value: r, label: r }))}
+                  value={selectedRatio}
+                  onChange={setSelectedRatio}
+                  disabled={!canInput}
+                />
+                <PillSelect
+                  icon={<Clock size={10} />}
+                  label={`${selectedDuration}s`}
+                  options={[4,5,6,8,10,12,15].map(d => ({ value: String(d), label: `${d}s` }))}
+                  value={String(selectedDuration)}
+                  onChange={(v) => setSelectedDuration(Number(v))}
+                  disabled={!canInput}
+                />
+              </div>
+            )}
+
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border-subtle">
               <PillSelect
@@ -2376,36 +2380,35 @@ export function ChatPanel() {
                 onChange={(v) => setSendMode(v as SendMode)}
                 disabled={!canInput}
               />
-              <PillSelect
-                icon={<Zap size={10} />}
-                label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
-                options={[
-                  { value: 'seedance_2.0_fast', label: 'Seedance 2.0 Fast' },
-                  { value: 'seedance_2.0', label: 'Seedance 2.0' },
-                ]}
-                value={selectedModel}
-                onChange={setSelectedModel}
+
+              {/* Params summary toggle */}
+              <button
+                onClick={() => setShowAdvanced(v => !v)}
                 disabled={!canInput}
-              />
-              <PillTag label="全能参考" icon={<Layers size={10} />} />
-              <PillSelect
-                icon={<RectangleHorizontal size={10} />}
-                label={selectedRatio}
-                options={['9:16','16:9','1:1','4:3','3:4','21:9'].map(r => ({ value: r, label: r }))}
-                value={selectedRatio}
-                onChange={setSelectedRatio}
-                disabled={!canInput}
-              />
-              <PillSelect
-                icon={<Clock size={10} />}
-                label={`${selectedDuration}s`}
-                options={[4,5,6,8,10,12,15].map(d => ({ value: String(d), label: `${d}s` }))}
-                value={String(selectedDuration)}
-                onChange={(v) => setSelectedDuration(Number(v))}
-                disabled={!canInput}
-              />
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors disabled:opacity-40 ${
+                  showAdvanced
+                    ? 'bg-brand/15 text-brand'
+                    : 'bg-surface-3 text-text-muted hover:text-text-secondary'
+                }`}
+                title="生成参数"
+              >
+                <Settings2 size={10} />
+                <span className="font-mono">{selectedModel === 'seedance_2.0_fast' ? 'Fast' : '标准'} · {selectedRatio} · {selectedDuration}s</span>
+              </button>
 
               <div className="flex-1" />
+
+              {/* Attach files (when no files selected) */}
+              {selectedFiles.length === 0 && (
+                <button
+                  onClick={handleSelectFiles}
+                  disabled={!canInput || !canAddFiles}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="添加素材（图片/视频/音频）"
+                >
+                  <Paperclip size={15} />
+                </button>
+              )}
 
               {/* Send button */}
               <button
@@ -2478,7 +2481,7 @@ function getProgressText(step: GuidedStep): string {
   return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
 
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -2494,6 +2497,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   setGuidedStep?: (step: any) => void;
   setMessages?: (fn: (prev: Message[]) => Message[]) => void;
   setTaskMode?: (mode: any) => void;
+  onInputRestore?: () => void;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -2773,9 +2777,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           onConfirm={onConfirm}
           onEdit={onEdit!}
           onBack={() => {
-            // 返回到编辑状态，清除确认卡片
-            setGuidedStep?.('task-drafting');
+            setGuidedStep?.('logged-in-ready');
             setMessages?.(prev => prev.filter(m => m.id !== msg.id));
+            onInputRestore?.();
           }}
           hasFiles={(task as any).hasFiles}
           selectedModel={(task as any).selectedModel}
