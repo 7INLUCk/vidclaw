@@ -44,6 +44,15 @@ function parseCliJson(stdout) {
   }
 }
 
+// Register local-file:// as a privileged streaming scheme BEFORE app.ready.
+// stream:true  → byte-range requests are supported (required for video seek/play)
+// secure:true  → treated as secure context (allows media autoplay, canvas access)
+// bypassCSP    → not blocked by http://localhost:5173 content security policy
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'local-file',
+  privileges: { stream: true, secure: true, bypassCSP: true, supportFetchAPI: true },
+}]);
+
 // 🔴 禁用 GPU 加速（解决 macOS 黑屏问题）
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
@@ -938,7 +947,9 @@ if (gotTheLock) {
     const { pathToFileURL } = require('url');
     protocol.handle('local-file', (request) => {
       const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
-      return net.fetch(pathToFileURL(filePath).toString());
+      // Forward all request headers (including Range: bytes=X-Y) so that video
+      // elements can seek and stream the file with proper 206 Partial Content responses.
+      return net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
     });
     registerIpcHandlers();
     await createWindow();
