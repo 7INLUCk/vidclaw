@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play, XCircle } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play, XCircle, Plus } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type BatchTaskItem } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { PromptTemplates } from './PromptTemplates';
@@ -500,6 +500,57 @@ function ProgressMessage({ msg }: { msg: Message }) {
   );
 }
 
+// ── Pill Select Dropdown ──
+function PillSelect({ label, options, value, onChange, disabled }: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => !disabled && setOpen(v => !v)}
+        disabled={disabled}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle hover:border-border bg-surface-1 hover:bg-surface-2 text-[11px] text-text-secondary hover:text-text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        {label}
+        <ChevronDown size={10} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full mb-1.5 left-0 bg-surface-3 border border-border rounded-lg shadow-lg z-20 py-1 min-w-[100px]">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full px-3 py-1.5 text-left text-xs transition-colors ${
+                opt.value === value
+                  ? 'text-brand bg-brand/10'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-2'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Parameter Panel (Card-style layout) ──
 function ParameterPanel({
   model, setModel, duration, setDuration, aspectRatio, setAspectRatio, visible
@@ -933,7 +984,10 @@ export function ChatPanel() {
   const [useStructuredFlow] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('vidclaw_onboarded'));
   const [showMaterialLib, setShowMaterialLib] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false); // 重构5: Prompt模板默认隐藏
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [showRefMenu, setShowRefMenu] = useState(false);
+  const [viewFile, setViewFile] = useState<string | null>(null);
 
   // ── 素材描述编辑处理 ──
   function handleEditMaterial(index: number, newDesc: string) {
@@ -1622,6 +1676,15 @@ export function ChatPanel() {
         return;
       }
 
+      if (data.event === 'login-scanning') {
+        // CLI 有新输出 = 用户已扫码，正在等服务器确认
+        // 把 QR 码消息标记为 scanning 状态，给用户即时反馈
+        setMessages((prev) => prev.map(m =>
+          m.type === 'qr-code' ? { ...m, data: { ...m.data, scanning: true } } : m
+        ));
+        return;
+      }
+
       if (data.event === 'login-failed') {
         setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
         const errorMsg = data.data?.error || '登录失败';
@@ -1762,6 +1825,38 @@ export function ChatPanel() {
 
       {/* Onboarding Overlay (问题6) */}
       {showOnboarding && <OnboardingOverlay onDismiss={handleDismissOnboarding} isLoggedIn={!!useStore.getState().isLoggedIn} />}
+
+      {/* Lightbox */}
+      {viewFile && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'oklch(0.03 0.005 250 / 0.92)' }}
+          onClick={() => setViewFile(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[oklch(0.22_0.01_250)] hover:bg-[oklch(0.28_0.01_250)] flex items-center justify-center transition-colors"
+            onClick={() => setViewFile(null)}
+          >
+            <X size={15} className="text-[var(--color-text-muted,oklch(0.65_0.01_250))]" />
+          </button>
+          {/\.(mp4|mov|avi|webm)$/i.test(viewFile) ? (
+            <video
+              src={`local-file://${viewFile}`}
+              controls
+              autoPlay
+              className="max-w-[90vw] max-h-[85vh] rounded-lg"
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={`local-file://${viewFile}`}
+              alt="preview"
+              className="max-w-[90vw] max-h-[85vh] rounded-lg object-contain"
+              onClick={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      )}
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -1849,138 +1944,176 @@ export function ChatPanel() {
       </div>
 
       {/* Parameter Panel */}
-      <ParameterPanel
-        model={selectedModel}
-        setModel={setSelectedModel}
-        duration={selectedDuration}
-        setDuration={setSelectedDuration}
-        aspectRatio={selectedRatio}
-        setAspectRatio={setSelectedRatio}
-        visible={showParams && (canInput || guidedStep === 'task-confirming')}
-      />
-
-      {/* File preview */}
-      {selectedFiles.length > 0 && showInputArea && (
-        <div className="px-6 py-2 border-t border-border-subtle flex-shrink-0">
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
-            {selectedFiles.map((file, i) => {
-              const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file);
-              const isVideo = /\.(mp4|mov|avi|webm)$/i.test(file);
-              return (
-                <div key={i} className="relative group animate-fade-in">
-                  <div className="w-[80px] h-[80px] rounded-lg overflow-hidden bg-surface-2 border border-border-subtle flex items-center justify-center">
-                    {isImage ? (
-                      <img
-                        src={`file://${file}`}
-                        alt={file.split('/').pop()}
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : isVideo ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-2xl">🎬</span>
-                        <span className="text-[9px] text-text-muted">视频</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-2xl">🎵</span>
-                        <span className="text-[9px] text-text-muted">音频</span>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={10} />
-                  </button>
-                  <p className="text-[9px] text-text-muted text-center mt-0.5 truncate max-w-[80px]">
-                    {file.split('/').pop()}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Input Area */}
+      {/* Jimeng-style unified input card */}
       {showInputArea && (
-        <div className="px-6 py-4 border-t border-border-subtle flex-shrink-0">
-          <div className="flex items-end gap-2.5">
-            <button
-              onClick={handleSelectFiles}
-              disabled={!canInput}
-              className="p-2.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text-primary transition-all duration-150 flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed"
-              title="上传素材"
-            >
-              <Upload size={18} />
-            </button>
-            <button
-              onClick={() => setShowMaterialLib(true)}
-              disabled={!canInput}
-              className="p-2.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text-primary transition-all duration-150 flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed"
-              title="素材库"
-            >
-              <FolderOpen size={18} />
-            </button>
-            <button
-              onClick={() => setShowParams(!showParams)}
-              disabled={!canInput}
-              className={`p-2.5 rounded-lg transition-all duration-150 flex-shrink-0 disabled:opacity-25 disabled:cursor-not-allowed flex items-center gap-0.5 ${
-                showParams ? 'bg-brand/15 text-brand' : 'hover:bg-surface-2 text-text-muted hover:text-text-primary'
-              }`}
-              title="参数设置"
-            >
-              <Settings2 size={18} />
-              {showParams ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            </button>
+        <div className="px-4 py-3 flex-shrink-0">
+          <div className={`rounded-xl border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.35)] ${
+            inputFocused
+              ? 'border-brand/60 bg-surface-3'
+              : 'border-[oklch(0.38_0.01_250)] bg-surface-3 hover:border-[oklch(0.44_0.01_250)]'
+          }`}>
 
-            <div className="flex-1 relative">
+            {/* Top: reference thumbnails + textarea */}
+            <div className="flex gap-3 p-3 pb-2">
+
+              {/* Reference area: thumbnails grid + add button */}
+              {(() => {
+                const imgCount = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).length;
+                const vidCount = selectedFiles.filter(f => /\.(mp4|mov|avi|webm)$/i.test(f)).length;
+                const audCount = selectedFiles.filter(f => /\.(mp3|wav|aac|m4a)$/i.test(f)).length;
+                // 官方限制: image≤9, video≤3, audio≤3
+                const canAdd = canInput && (imgCount < 9 || vidCount < 3 || audCount < 3);
+
+                return (
+                  <div className="flex-shrink-0 relative" style={{ maxWidth: '136px' }}>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedFiles.map((file, i) => {
+                        const isImg = /\.(jpg|jpeg|png|webp|gif)$/i.test(file);
+                        const isVid = /\.(mp4|mov|avi|webm)$/i.test(file);
+                        return (
+                          <div key={i} className="relative group w-[60px] h-[60px]">
+                            <button
+                              onClick={() => setViewFile(file)}
+                              className="w-full h-full rounded-lg overflow-hidden bg-surface-1 border border-border-subtle hover:border-border transition-colors flex items-center justify-center"
+                            >
+                              {isImg ? (
+                                <img
+                                  src={`local-file://${file}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    const t = e.target as HTMLImageElement;
+                                    t.style.display = 'none';
+                                    t.parentElement!.innerHTML = '<span style="font-size:20px">🖼</span>';
+                                  }}
+                                />
+                              ) : isVid ? (
+                                <span className="text-xl">🎬</span>
+                              ) : (
+                                <span className="text-xl">🎵</span>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-error/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            >
+                              <X size={8} />
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                      {/* Add more button */}
+                      {canAdd && (
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowRefMenu(v => !v)}
+                            className="w-[60px] h-[60px] rounded-lg border border-dashed border-border hover:border-brand/50 bg-surface-1 flex flex-col items-center justify-center gap-1 transition-all group"
+                          >
+                            <Plus size={15} className="text-text-muted group-hover:text-text-primary transition-colors" />
+                            {selectedFiles.length === 0 && (
+                              <span className="text-[9px] text-text-muted group-hover:text-text-primary transition-colors leading-tight text-center">参考内容</span>
+                            )}
+                          </button>
+
+                          {showRefMenu && (
+                            <div className="absolute left-0 top-full mt-1.5 bg-surface-3 border border-border rounded-lg shadow-lg z-20 py-1 min-w-[130px]">
+                              <button
+                                onClick={() => { handleSelectFiles(); setShowRefMenu(false); }}
+                                className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
+                              >
+                                <Upload size={11} />
+                                上传文件
+                              </button>
+                              <button
+                                onClick={() => { setShowMaterialLib(true); setShowRefMenu(false); }}
+                                className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
+                              >
+                                <FolderOpen size={11} />
+                                从素材库选择
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Textarea */}
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={canInput ? handleKeyDown : undefined}
-                placeholder={canInput ? '描述你想生成的视频... 按 Enter 发送' : '请先完成当前步骤...'}
-                rows={1}
-                className="w-full bg-surface-1 border border-border rounded-md px-4 py-3 text-sm text-text-primary placeholder-text-muted resize-none focus-brand transition-all duration-200"
-                style={{ maxHeight: '120px' }}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => { setInputFocused(false); setShowRefMenu(false); }}
+                placeholder={canInput ? '描述你想生成的视频...' : '请先完成当前步骤...'}
+                rows={3}
+                className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder-text-secondary py-0.5 leading-relaxed"
+                style={{ minHeight: '68px', maxHeight: '160px' }}
                 disabled={!canInput}
               />
             </div>
 
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || !canInput}
-              className="p-3 rounded-md bg-brand hover:bg-brand/90 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all duration-150 flex-shrink-0 hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-          <p className="text-[10px] text-text-disabled mt-2 text-center">
-            支持描述视频需求 · 上传参考图/视频 · ⚙️ 结构化模式(带素材时自动启用)
-          </p>
-        </div>
-      )}
+            {/* Bottom toolbar */}
+            <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border-subtle">
+              <PillSelect
+                label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
+                options={[
+                  { value: 'seedance_2.0_fast', label: 'Seedance 2.0 Fast' },
+                  { value: 'seedance_2.0', label: 'Seedance 2.0' },
+                ]}
+                value={selectedModel}
+                onChange={setSelectedModel}
+                disabled={!canInput}
+              />
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle bg-surface-1 text-[11px] text-text-secondary select-none">
+                <Layers size={10} />
+                全能参考
+              </div>
+              <PillSelect
+                label={selectedRatio}
+                options={['9:16','16:9','1:1','4:3','3:4','21:9'].map(r => ({ value: r, label: r }))}
+                value={selectedRatio}
+                onChange={setSelectedRatio}
+                disabled={!canInput}
+              />
+              <PillSelect
+                label={`${selectedDuration}s`}
+                options={[4,5,6,8,10,12,15].map(d => ({ value: String(d), label: `${d}s` }))}
+                value={String(selectedDuration)}
+                onChange={(v) => setSelectedDuration(Number(v))}
+                disabled={!canInput}
+              />
 
-      {/* Prompt Templates - 重构5: 点击按钮弹出 */}
-      {showInputArea && showTemplates && (
-        <div className="px-6 py-3 border-t border-border-subtle flex-shrink-0 animate-fade-in-up">
-          <PromptTemplates onSelect={(prompt) => { setInput(prompt); textareaRef.current?.focus(); setShowTemplates(false); }} />
-        </div>
-      )}
-      {/* 模板按钮 */}
-      {showInputArea && !showTemplates && (
-        <div className="px-6 py-2 flex-shrink-0">
-          <button
-            onClick={() => setShowTemplates(true)}
-            className="w-full py-1.5 text-xs text-text-muted hover:text-text-secondary bg-surface-1 hover:bg-surface-2 rounded-lg transition-all flex items-center justify-center gap-1.5 border border-border-subtle"
-          >
-            <Sparkles size={12} />
-            快速开始：选择预设模板
-            <ChevronDown size={12} />
-          </button>
+              <div className="flex-1" />
+
+              {/* Send button */}
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || !canInput}
+                className="w-8 h-8 rounded-full bg-brand hover:bg-brand/90 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all active:scale-95"
+              >
+                <ArrowUp size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Templates toggle */}
+          {showTemplates ? (
+            <div className="mt-2 animate-fade-in-up">
+              <PromptTemplates onSelect={(prompt) => { setInput(prompt); textareaRef.current?.focus(); setShowTemplates(false); }} />
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowTemplates(true)}
+              className="mt-1.5 w-full py-1 text-[11px] text-text-disabled hover:text-text-muted flex items-center justify-center gap-1 transition-colors"
+            >
+              <Sparkles size={10} />
+              快速开始：选择预设模板
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2098,45 +2231,54 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   // QR code message
   if (msg.type === 'qr-code' && msg.data?.qrBase64) {
     const isLoggedIn = useStore.getState().isLoggedIn;
+    const scanning = !!msg.data?.scanning;
     return (
       <div className="flex justify-start">
         <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed mb-3">{msg.content}</p>
-          <img
-            src={msg.data.qrBase64}
-            alt="登录二维码"
-            className="w-48 h-48 mx-auto border border-border rounded-md"
-          />
-          <p className="text-xs text-text-muted mt-2 text-center">打开抖音 APP 扫码授权</p>
-          <p className="text-[11px] text-text-disabled mt-1 text-center">扫码后请稍候 3–10 秒，等待服务器验证</p>
 
-          {/* 取消/切换按钮 */}
-          <div className="flex items-center justify-center gap-3 mt-3">
-            <button
-              onClick={() => {
-                // 取消登录:返回 welcome 步骤,清除 QR 码消息
-                useStore.getState().setGuidedStep('welcome');
-                // 停止 polling(如果有)
-                const timer = (window as any).__loginPollTimer;
-                if (timer) clearInterval(timer);
-              }}
-              className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary bg-surface-3 hover:bg-border rounded-lg transition-all"
-            >
-              取消登录
-            </button>
-            {isLoggedIn && (
+          {/* QR 图 or 验证中状态 */}
+          {scanning ? (
+            <div className="w-48 h-48 mx-auto flex flex-col items-center justify-center gap-3 border border-border rounded-md bg-surface-1">
+              <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-medium text-text-primary">正在验证身份</p>
+              <p className="text-[11px] text-text-muted text-center px-4">已收到扫码请求，请在抖音 APP 中确认授权</p>
+            </div>
+          ) : (
+            <>
+              <img
+                src={msg.data.qrBase64}
+                alt="登录二维码"
+                className="w-48 h-48 mx-auto border border-border rounded-md"
+              />
+              <p className="text-xs text-text-muted mt-2 text-center">打开抖音 APP 扫码授权</p>
+              <p className="text-[11px] text-text-disabled mt-1 text-center">扫码后请稍候 3–10 秒，等待服务器验证</p>
+            </>
+          )}
+
+          {/* 取消按钮 */}
+          {!scanning && (
+            <div className="flex items-center justify-center gap-3 mt-3">
               <button
                 onClick={() => {
-                  // 切换账号:重新触发登录流程
-                  useStore.getState().setGuidedStep('checking-login');
-                  // 重新调用 handleReady
+                  useStore.getState().setGuidedStep('welcome');
+                  const timer = (window as any).__loginPollTimer;
+                  if (timer) clearInterval(timer);
                 }}
-                className="px-3 py-1.5 text-xs text-brand hover:text-brand-light bg-brand/10 hover:bg-brand/20 rounded-lg transition-all"
+                className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary bg-surface-3 hover:bg-border rounded-lg transition-all"
               >
-                切换账号
+                取消登录
               </button>
-            )}
-          </div>
+              {isLoggedIn && (
+                <button
+                  onClick={() => useStore.getState().setGuidedStep('checking-login')}
+                  className="px-3 py-1.5 text-xs text-brand hover:text-brand-light bg-brand/10 hover:bg-brand/20 rounded-lg transition-all"
+                >
+                  切换账号
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -421,36 +421,46 @@ function registerIpcHandlers() {
       let stdout = '';
       let stderr = '';
       let qrPath = null;
-      let resolved = false; // 防止 close 事件与超时重复触发
-      
+      let resolved = false;      // 防止 close 与超时重复触发
+      let qrShown = false;       // QR 已发送给渲染层
+      let scanningFired = false; // 扫码信号只发一次
+
       child.stdout.on('data', (data) => {
         const text = data.toString();
         stdout += text;
         console.log('[登录 CLI]', text.trim());
-        
+
         // 检测 QR 码路径
         const qrMatch = text.match(/\[DREAMINA:QR_READY\]\s*(.+.png)/);
         if (qrMatch) {
           qrPath = qrMatch[1].trim();
+          qrShown = true;
           console.log('[登录] QR 码路径:', qrPath);
-          
+
           // 读取图片并转成 base64
           try {
             const qrBuffer = fs.readFileSync(qrPath);
             const qrBase64 = `data:image/png;base64,${qrBuffer.toString('base64')}`;
-            sendToRenderer('task:progress', { 
-              event: 'login-qr-ready', 
-              data: { qrBase64 } 
+            sendToRenderer('task:progress', {
+              event: 'login-qr-ready',
+              data: { qrBase64 }
             });
           } catch (err) {
             console.error('[登录] 读取 QR 码失败:', err.message);
-            sendToRenderer('task:progress', { 
-              event: 'login-qr-error', 
-              data: { error: '二维码加载失败' } 
+            sendToRenderer('task:progress', {
+              event: 'login-qr-error',
+              data: { error: '二维码加载失败' }
             });
           }
         }
-        
+
+        // QR 已显示后，任何新的 stdout 活动（非 QR_READY）= 用户可能已扫码
+        // 用这个信号触发"正在验证"状态，给用户即时反馈
+        if (qrShown && !scanningFired && !qrMatch && !resolved) {
+          scanningFired = true;
+          sendToRenderer('task:progress', { event: 'login-scanning', data: {} });
+        }
+
         // 检测登录成功
         if (text.includes('"login_success":true') || text.includes('LOGIN_SUCCESS')) {
           console.log('[登录] ✅ 登录成功');
@@ -875,6 +885,12 @@ function registerIpcHandlers() {
 
 // ===== 启动 =====
 if (gotTheLock) {
+  // 注册 local-file:// 协议，允许渲染层安全加载本地文件（缩略图等）
+  protocol.registerFileProtocol('local-file', (request, callback) => {
+    const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
+    callback({ path: filePath });
+  });
+
   app.whenReady().then(async () => {
     registerIpcHandlers();
     await createWindow();

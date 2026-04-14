@@ -32,12 +32,12 @@ export function MaterialLibrary({ visible, onClose, onSelect }: MaterialLibraryP
 
   return (
     <div
-      className="absolute inset-0 z-40 flex items-end justify-center animate-overlay-in"
+      className="absolute inset-0 z-40 flex items-center justify-center animate-overlay-in p-6"
       style={{ background: 'oklch(0.05 0.01 250 / 0.8)' }}
       onClick={onClose}
     >
       <div
-        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-t-md w-full max-w-lg max-h-[60vh] flex flex-col animate-card-pop"
+        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-full max-w-lg max-h-[70vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
