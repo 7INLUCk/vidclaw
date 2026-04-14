@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -717,17 +717,25 @@ function registerIpcHandlers() {
   // ---- 选择文件 ----
   ipcMain.handle('file:select', async () => {
     if (!mainWindow) return { files: [] };
+    // No dialog-level filter — macOS UTI mapping for audio extensions is
+    // unreliable and greys out valid files. Format + size validation is
+    // handled entirely in the renderer.
     const result = await dialog.showOpenDialog(mainWindow, {
       title: '选择素材文件',
-      filters: [
-        { name: '所有支持格式', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'mov', 'avi', 'webm'] },
-        { name: '仅图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
-        { name: '仅视频', extensions: ['mp4', 'mov', 'avi', 'webm'] },
-      ],
       properties: ['openFile', 'multiSelections'],
     });
     if (result.canceled) return { files: [] };
     return { files: result.filePaths };
+  });
+
+  // ---- 获取文件大小 (for renderer-side validation) ----
+  ipcMain.handle('file:stat', async (_event, filePath) => {
+    try {
+      const stat = require('fs').statSync(filePath);
+      return { size: stat.size };
+    } catch {
+      return { size: 0 };
+    }
   });
 
   // ---- 选择下载目录 ----
@@ -860,6 +868,12 @@ function registerIpcHandlers() {
 // ===== 启动 =====
 if (gotTheLock) {
   app.whenReady().then(async () => {
+    // Register local-file:// protocol to serve local media files to renderer
+    // (standard file:// is blocked when renderer loads from http://localhost:5173)
+    protocol.registerFileProtocol('local-file', (request, callback) => {
+      const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
+      callback({ path: filePath });
+    });
     registerIpcHandlers();
     await createWindow();
   });
