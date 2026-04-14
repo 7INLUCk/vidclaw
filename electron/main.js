@@ -947,17 +947,74 @@ if (gotTheLock) {
     // IPC handlers first — must not be blocked by protocol setup failures
     registerIpcHandlers();
 
-    // local-file:// protocol for serving local media with byte-range support.
-    // Wrapped in try/catch: on hot-reload the scheme may already be registered
-    // ("already registered" error), which must not break IPC handler setup.
+    // local-file:// protocol — serves local media with full byte-range support.
+    // net.fetch('file://...') is broken for range requests in Electron 37+
+    // (electron/electron#38749, still open as of Electron 41). We implement
+    // range handling manually with fs.createReadStream so <video> can seek
+    // and canvas.drawImage can capture frames for thumbnails.
+    // Wrapped in try/catch so a "scheme already registered" error on hot-reload
+    // does not abort startup (IPC handlers are registered before this).
     try {
-      const { pathToFileURL } = require('url');
+      const MIME_TYPES = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.png': 'image/png',  '.webp': 'image/webp',
+        '.mp4': 'video/mp4',  '.mov': 'video/quicktime',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
+        '.aac': 'audio/aac',  '.m4a': 'audio/mp4',
+      };
       protocol.handle('local-file', (request) => {
-        const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
-        return net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
+        try {
+          const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
+          if (!fs.existsSync(filePath)) {
+            return new Response('File not found', { status: 404 });
+          }
+          const stat = fs.statSync(filePath);
+          const fileSize = stat.size;
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
+          const rangeHeader = request.headers.get('range');
+
+          if (rangeHeader) {
+            const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+            if (match) {
+              const start = parseInt(match[1], 10);
+              const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+              if (start >= fileSize || end >= fileSize) {
+                return new Response(null, {
+                  status: 416,
+                  headers: { 'Content-Range': `bytes */${fileSize}` },
+                });
+              }
+              const chunkSize = end - start + 1;
+              const stream = fs.createReadStream(filePath, { start, end });
+              return new Response(stream, {
+                status: 206,
+                headers: {
+                  'Content-Type': mimeType,
+                  'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                  'Content-Length': String(chunkSize),
+                  'Accept-Ranges': 'bytes',
+                },
+              });
+            }
+          }
+          // Non-range request — return full file
+          const stream = fs.createReadStream(filePath);
+          return new Response(stream, {
+            status: 200,
+            headers: {
+              'Content-Type': mimeType,
+              'Content-Length': String(fileSize),
+              'Accept-Ranges': 'bytes',
+            },
+          });
+        } catch (err) {
+          console.error('[Protocol] local-file error:', err.message);
+          return new Response('Internal Server Error', { status: 500 });
+        }
       });
     } catch (e) {
-      console.warn('[Protocol] local-file:// handler registration failed (may already be registered):', e.message);
+      console.warn('[Protocol] local-file:// handler registration skipped (already registered):', e.message);
     }
 
     await createWindow();
