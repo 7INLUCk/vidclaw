@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Notification, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -930,11 +930,15 @@ function registerIpcHandlers() {
 // ===== 启动 =====
 if (gotTheLock) {
   app.whenReady().then(async () => {
-    // Register local-file:// protocol to serve local media files to renderer
-    // (standard file:// is blocked when renderer loads from http://localhost:5173)
-    protocol.registerFileProtocol('local-file', (request, callback) => {
-      const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
-      callback({ path: filePath });
+    // Register local-file:// protocol to serve local media files to renderer.
+    // Uses protocol.handle + net.fetch('file://') so that byte-range requests
+    // are handled natively by Chromium — required for <video> seek/playback and
+    // canvas frame capture. The old registerFileProtocol callback API does not
+    // support range requests, which breaks video thumbnails and preview playback.
+    const { pathToFileURL } = require('url');
+    protocol.handle('local-file', (request) => {
+      const filePath = decodeURIComponent(request.url.slice('local-file://'.length));
+      return net.fetch(pathToFileURL(filePath).toString());
     });
     registerIpcHandlers();
     await createWindow();
