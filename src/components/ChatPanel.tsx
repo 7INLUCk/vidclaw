@@ -1129,19 +1129,7 @@ export function ChatPanel() {
           console.error('模式初始化失败:', e);
         }
       } else {
-        // 登录失败
-        const errorMsg = loginResult.error || '登录失败';
-        const isVipError = errorMsg.includes('高级会员') || errorMsg.includes('会员');
-        addMessage({
-          id: Date.now().toString() + '_login_err',
-          role: 'assistant',
-          content: isVipError
-            ? '❌ 登录失败:即梦 CLI 需要高级会员\n\n请前往即梦网页升级会员后重试:\nhttps://jimeng.jianying.com'
-            : `❌ 登录失败:${errorMsg}`,
-          timestamp: new Date(),
-          type: 'login-error',
-          data: { isVipError, canRetry: true },
-        });
+        // login-failed 进度事件已统一处理所有失败（含超时），此处只重置状态
         setGuidedStep('welcome');
       }
     } catch (err) {
@@ -1152,6 +1140,52 @@ export function ChatPanel() {
         timestamp: new Date(),
         type: 'error',
       });
+      setGuidedStep('welcome');
+    }
+  }
+
+  async function handleLoginRetry() {
+    // 清除所有登录相关的旧消息
+    setMessages((prev) => prev.filter(m =>
+      m.type !== 'login-error' && m.type !== 'qr-code' && m.type !== 'login-loading'
+    ));
+
+    setGuidedStep('waiting-login');
+    addMessage({
+      id: Date.now().toString() + '_retry_login',
+      role: 'assistant',
+      content: '正在重新启动登录流程...',
+      timestamp: new Date(),
+    });
+
+    const loginResult = await window.api.authLogin();
+
+    if (loginResult.success) {
+      setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
+      addMessage({
+        id: Date.now().toString() + '_login_ok',
+        role: 'assistant',
+        content: '✅ 登录成功!',
+        timestamp: new Date(),
+      });
+      useStore.getState().setIsLoggedIn(true);
+      setGuidedStep('logged-in-ready');
+      try {
+        const modeResult = await window.api.initMode();
+        if (modeResult.success) {
+          addMessage({
+            id: Date.now().toString() + '_mode_ok',
+            role: 'assistant',
+            content: '✅ 视频创作模式已就绪!请描述你想生成的视频。',
+            timestamp: new Date(),
+            type: 'mode-select',
+          });
+        }
+      } catch (e) {
+        console.error('模式初始化失败:', e);
+      }
+    } else {
+      // login-failed 进度事件已统一处理所有失败（含超时），此处只重置状态
       setGuidedStep('welcome');
     }
   }
@@ -1607,9 +1641,21 @@ export function ChatPanel() {
         return;
       }
 
+      if (data.event === 'login-start') {
+        addMessage({
+          id: 'login-loading',
+          role: 'assistant',
+          content: '正在生成二维码...',
+          timestamp: new Date(),
+          type: 'login-loading',
+        });
+        return;
+      }
+
       if (data.event === 'login-qr-ready') {
         const qrBase64 = data.data?.qrBase64;
         if (qrBase64) {
+          setMessages((prev) => prev.filter(m => m.type !== 'login-loading'));
           addMessage({
             id: Date.now().toString() + '_qr',
             role: 'assistant',
@@ -1671,63 +1717,6 @@ export function ChatPanel() {
           content: `📦 批量任务完成!\n✅ ${succeeded} 成功 / ❌ ${failed} 失败 / 共 ${total} 个任务`,
           timestamp: new Date(),
         });
-      } else if (data.event === 'login-qr-ready') {
-        // 显示 QR 码
-        const qrBase64 = data.data?.qrBase64;
-        if (qrBase64) {
-          addMessage({
-            id: Date.now().toString() + '_qr',
-            role: 'assistant',
-            content: '请用抖音 APP 扫描下方二维码登录:',
-            timestamp: new Date(),
-            type: 'qr-code',
-            data: { qrBase64 },
-          });
-        }
-      } else if (data.event === 'login-success') {
-        // 登录成功,清除 QR 码消息,继续流程
-        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
-        addMessage({
-          id: Date.now().toString() + '_login_ok',
-          role: 'assistant',
-          content: '✅ 登录成功!正在初始化...',
-          timestamp: new Date(),
-        });
-        useStore.getState().setIsLoggedIn(true);
-        // 初始化模式
-        window.api.initMode().then((modeResult) => {
-          if (modeResult.success) {
-            setGuidedStep('logged-in-ready');
-            addMessage({
-              id: Date.now().toString() + '_mode_ok',
-              role: 'assistant',
-              content: '✅ 视频创作模式已就绪!请描述你想生成的视频。',
-              timestamp: new Date(),
-              type: 'mode-select',
-            });
-          } else {
-            setGuidedStep('logged-in-ready');
-          }
-        });
-      } else if (data.event === 'login-failed') {
-        // 登录失败,显示错误原因和解决方案
-        setMessages((prev) => prev.filter(m => m.type !== 'qr-code'));
-        const errorMsg = data.data?.error || '登录失败';
-
-        // 检测是否是会员限制
-        const isVipError = errorMsg.includes('高级会员') || errorMsg.includes('会员');
-
-        addMessage({
-          id: Date.now().toString() + '_login_err',
-          role: 'assistant',
-          content: isVipError
-            ? '❌ 登录失败:即梦 CLI 需要高级会员\n\n请前往即梦网页升级会员后重试:\nhttps://jimeng.jianying.com'
-            : `❌ 登录失败:${errorMsg}`,
-          timestamp: new Date(),
-          type: 'login-error',
-          data: { isVipError, canRetry: true },
-        });
-        setGuidedStep('welcome');
       }
     });
     return () => removeProgress();
@@ -1876,6 +1865,7 @@ export function ChatPanel() {
                   onConfirm={msg.type === 'ai-rewrite' && msg.data && guidedStep === 'task-confirming' ? handleConfirmTask : msg.type === 'batch-confirm' && msg.data ? () => handleConfirmBatch(msg.data) : undefined}
                   onEdit={msg.type === 'ai-rewrite' && msg.data && guidedStep === 'task-confirming' ? handleEditTask : undefined}
                   onRetry={msg.type === 'error' && lastPrompt ? handleRetry : undefined}
+                  onLoginRetry={msg.type === 'login-error' ? handleLoginRetry : undefined}
                   task={msg.type === 'ai-rewrite' ? msg.data : undefined}
                   onDurationChange={setSelectedDuration}
                   onRatioChange={setSelectedRatio}
@@ -2083,13 +2073,14 @@ function getProgressText(step: GuidedStep): string {
   return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
 
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
   onConfirm?: () => void;
   onEdit?: () => void;
   onRetry?: () => void;
+  onLoginRetry?: () => void;
   task?: any;
   onDurationChange?: (d: number) => void;
   onRatioChange?: (r: string) => void;
@@ -2132,7 +2123,24 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
     );
   }
 
-  // QR code message
+  // Login loading message
+  if (msg.type === 'login-loading') {
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <span className="inline-flex gap-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:0ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:300ms]" />
+            </span>
+            {msg.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // QR code message
   if (msg.type === 'qr-code' && msg.data?.qrBase64) {
     const isLoggedIn = useStore.getState().isLoggedIn;
@@ -2201,10 +2209,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
 
           {canRetry && (
             <button
-              onClick={() => {
-                // 清除错误消息,重新开始登录
-                useStore.getState().setGuidedStep('welcome');
-              }}
+              onClick={onLoginRetry}
               className="mt-3 px-4 py-2 text-xs rounded-lg bg-surface-3 hover:bg-surface-1 border border-border-subtle transition-colors"
             >
               重新登录

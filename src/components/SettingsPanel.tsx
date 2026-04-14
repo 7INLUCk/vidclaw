@@ -3,7 +3,7 @@ import { FolderOpen, RefreshCw, Check, LogOut, BarChart3, TrendingUp, CheckCircl
 import { useStore } from '../store';
 
 export function SettingsPanel() {
-  const { settings, setSettings, addMessage, usage } = useStore();
+  const { settings, setSettings, addMessage, usage, setGuidedStep, setMessages } = useStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -35,12 +35,8 @@ export function SettingsPanel() {
     const result = await window.api.authLogout();
     if (result.success) {
       useStore.getState().setIsLoggedIn(false);
-      addMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'system',
-        content: '✅ 已清除登录态，下次使用时需要重新登录',
-        timestamp: new Date(),
-      });
+      setMessages(() => []);
+      setGuidedStep('welcome');
     } else {
       addMessage({
         id: (Date.now() + 1).toString(),

@@ -1,0 +1,591 @@
+const https = require('https');
+
+// 即梦提示词改写系统 Prompt（普通模式，适配 Seedance 2.0）
+const SYSTEM_PROMPT = `你是即梦 Seedance 2.0 的提示词优化专家。
+
+用户会用自然语言描述想要生成的内容。你的任务不是翻译，而是把用户的模糊需求改写成能让 Seedance 2.0 生成最佳效果的提示词。
+
+## 输出格式（严格 JSON）
+{
+  "prompt": "优化后的提示词",
+  "duration": 5,
+  "aspectRatio": "16:9",
+  "type": "video",
+  "style": "写实"
+}
+
+## 改写原则
+1. 用中文写，Seedance 2.0 原生支持中文
+2. 不要翻译用户的内容，而是**丰富和优化**：补充画面细节、运镜方式、光影氛围、风格质感
+3. 结构：主体 + 动作 + 场景 + 光线 + 风格 + 运镜
+4. 具体可视觉化，避免抽象描述（❌"好看的" → ✅"晨光透过树叶的丁达尔效应"）
+5. 强调运动和时间维度（视频生成需要动态描述）
+6. 默认生成视频（type: "video"），用户明确说"图片/照片"时用 "image"
+7. 默认 5 秒，用户明确指定其他时长时调整
+8. 默认 16:9 横屏，用户说"竖屏/手机"时用 "9:16"
+9. 控制在 100 字以内，精炼有力
+
+## 示例
+用户："帮我生成一段猫咪在樱花树下奔跑的视频"
+输出：{"prompt": "一只橘猫在樱花隧道中奔跑，花瓣随风飘落，温暖的金色阳光透过花枝洒下，浅景深柔焦背景，电影级慢镜头，4K画质，暖色调", "duration": 5, "aspectRatio": "16:9", "type": "video", "style": "写实"}
+
+用户："一张赛博朋克风格的城市夜景图"
+输出：{"prompt": "赛博朋克未来都市夜景，霓虹灯在湿漉漉的街道上反射，摩天大楼表面投射全息广告，远处有飞行器穿梭，细雨蒙蒙，阴郁氛围，银翼杀手风格，电影构图", "duration": null, "aspectRatio": "16:9", "type": "image", "style": "赛博朋克"}
+`;
+
+// Seedance 2.0 全能参考模式提示词改写系统 Prompt（有素材时使用 @引用格式）
+const SEEDANCE_SYSTEM_PROMPT = `你是即梦 Seedance 2.0「全能参考」模式的提示词专家。
+
+用户会上传素材（图片、视频、音频）并用自然语言描述需求。你需要将其改写为专业的 @引用格式提示词。
+
+## 输出格式（严格 JSON）
+{
+  "prompt": "带@引用的中文提示词",
+  "reason": "改写理由（简洁说明为什么这样写）",
+  "duration": 5,
+  "aspectRatio": "16:9"
+}
+
+## 素材上传顺序规则（必须遵守）
+用户上传的素材按以下顺序排列：
+- 图片排在前，视频其次，音频最后
+- @图片1 = 第1张上传的图片，@图片2 = 第2张...
+- @视频1 = 第1个上传的视频，@视频2 = 第2个...
+- @音频1 = 第1个上传的音频
+- 提示词中的 @引用编号必须严格对应上传顺序
+
+## @引用职责分配
+- @图片N：负责人物形象、穿着、外貌特征、背景场景、画面风格
+- @视频N：只负责动作、运镜、节奏、转场（不涉及外貌）
+- @音频N：负责配乐、音效、对话音色
+
+## @引用可读化规则（必须遵守）
+每次使用 @引用时，必须在后面加括号说明该素材的内容摘要，让用户直观理解每个 @引用对应什么素材。
+格式：@图片1（红裙女生照片）、@视频1（街舞视频）、@音频1（欢快BGM）
+- 括号内用简短中文描述素材核心内容（3-8个字）
+- 这样用户看到改写结果时能立刻理解每个 @引用对应什么素材
+
+## 提示词写作规则
+1. 用中文写，即梦支持中文
+2. 明确每个 @引用素材的职责，不混用
+3. 保持简洁，不要冗余描述
+4. 有视频素材时，强调「参考 @视频N（描述）的动作/运镜」
+5. 有图片素材时，强调「保持 @图片N（描述）的形象/背景」
+6. 多素材场景必须指定「谁做什么」，不要让模型猜
+7. 默认 5 秒，用户明确指定其他时长时调整
+8. 默认 16:9 横屏，用户说「竖屏/手机」时用 9:16
+9. 每个 @引用后面必须带括号说明素材内容，提升可读性
+
+## 示例
+
+用户上传：图片1（人像）、视频1（舞蹈）
+用户输入："让这个人跳舞"
+
+输出：
+{
+  "prompt": "使用 @图片1（人像照片）作为人物形象和场景参考，保持人物外貌、穿着和背景完全不变。参考 @视频1（舞蹈动作）的运镜方式，流畅完成整套舞蹈。人物每2-3秒自然眨眼。",
+  "reason": "图片负责人物形象，视频只负责动作参考。明确分配职责。",
+  "duration": 5,
+  "aspectRatio": "9:16"
+}
+
+用户上传：图片1（女生）、图片2（衣服）、视频1（舞蹈动作）
+用户输入："让这个人换上这件衣服，照着视频跳舞"
+
+输出：
+{
+  "prompt": "使用 @图片1（女生照片）作为人物参考，保持人物外貌和背景不变。人物穿着换成 @图片2（衣服图片）中的衣服。参考 @视频1（街舞视频）的舞蹈动作和运镜。",
+  "reason": "3素材场景：图片1=人物，图片2=衣服替换，视频1=动作参考。职责明确分开。",
+  "duration": 5,
+  "aspectRatio": "9:16"
+}
+
+用户上传：图片1（风景）、音频1（音乐）
+用户输入："做一个音乐卡点视频"
+
+输出：
+{
+  "prompt": "以 @图片1（风景照片）的场景为背景，根据 @音频1（欢快BGM）的音乐节奏进行画面切换和动态展示。",
+  "reason": "风景做画面基础，音频控制节奏。",
+  "duration": 10,
+  "aspectRatio": "16:9"
+}
+
+用户上传：无素材
+用户输入："一个女孩在雨中跳舞"
+
+输出：
+{
+  "prompt": "一个穿着白色连衣裙的女孩在雨中翩翩起舞，雨水顺着裙摆飞溅，背景是朦胧的城市夜景，霓虹灯倒映在积水中，浪漫唯美风格。",
+  "reason": "没有素材参考，纯文本描述场景。",
+  "duration": 5,
+  "aspectRatio": "9:16"
+}`;
+
+class AIService {
+  constructor(apiKey, model) {
+    // 使用 DeepSeek API
+    this.apiKey = apiKey || 'sk-4b2f09aa14204571b1b33a5d97839a63';
+    this.model = model || 'deepseek-chat';
+    this.baseUrl = 'https://api.deepseek.com/v1/chat/completions';
+  }
+
+  async rewritePrompt(userInput) {
+    const body = JSON.stringify({
+      model: this.model,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userInput }
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    return new Promise((resolve, reject) => {
+      const url = new URL(this.baseUrl);
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.error) {
+              reject(new Error(json.error.message || 'API 错误'));
+              return;
+            }
+            const content = json.choices?.[0]?.message?.content;
+            if (!content) {
+              reject(new Error('AI 返回空内容'));
+              return;
+            }
+
+            // 尝试从内容中提取 JSON
+            const task = this._parseResponse(content);
+            resolve(task);
+          } catch (err) {
+            reject(new Error(`解析失败: ${err.message}`));
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+
+  /**
+   * 智能推断素材用途
+   * 
+   * @param {string} userInput - 用户输入的需求
+   * @param {Array} materials - 素材列表 [{type, name, path}]
+   * @returns {Array} 推断后的素材列表 [{type, name, path, description, role}]
+   */
+  inferMaterialUsage(userInput, materials) {
+    if (!materials || materials.length === 0) return [];
+
+    const rules = [
+      { keywords: ['跳舞', '舞蹈', '动作'], imageRole: '人物形象', videoRole: '舞蹈动作参考' },
+      { keywords: ['换衣服', '穿搭', '衣服'], imageRole: '人物', image2Role: '衣服样式' },
+      { keywords: ['换背景', '场景', '背景'], imageRole: '人物', image2Role: '背景场景' },
+      { keywords: ['说话', '口播', '讲解', '配音'], imageRole: '人物形象', audioRole: '配音参考' },
+      { keywords: ['唱歌', '演唱'], imageRole: '人物形象', audioRole: '歌曲参考' },
+    ];
+
+    // 匹配规则
+    let matchedRule = null;
+    for (const rule of rules) {
+      if (rule.keywords.some(k => userInput.includes(k))) {
+        matchedRule = rule;
+        break;
+      }
+    }
+
+    // 如果没有匹配，使用默认推断
+    if (!matchedRule) {
+      matchedRule = { imageRole: '参考图片', videoRole: '参考视频', audioRole: '参考音频' };
+    }
+
+    // 应用推断
+    let imageIndex = 0;
+    let videoIndex = 0;
+    let audioIndex = 0;
+
+    return materials.map((m, i) => {
+      let description = m.name;
+      let role = '';
+
+      if (m.type === 'image') {
+        imageIndex++;
+        role = imageIndex === 1 ? matchedRule.imageRole : (matchedRule.image2Role || '参考图片');
+        description = role;
+      } else if (m.type === 'video') {
+        videoIndex++;
+        role = matchedRule.videoRole || '参考视频';
+        description = role;
+      } else if (m.type === 'audio') {
+        audioIndex++;
+        role = matchedRule.audioRole || '参考音频';
+        description = role;
+      }
+
+      return { ...m, description, role };
+    });
+  }
+
+  /**
+   * 判断是否需要追问用户
+   * 
+   * @param {string} userInput - 用户输入
+   * @param {Array} materials - 素材列表
+   * @returns {boolean} 是否需要追问
+   */
+  needsClarification(userInput, materials) {
+    // 单素材不需要追问
+    if (!materials || materials.length <= 1) return false;
+
+    // 多素材 + 需求模糊时追问
+    const vagueKeywords = ['帮我', '做一个', '弄个', '搞个', '生成'];
+    const hasVagueKeyword = vagueKeywords.some(k => userInput.includes(k));
+    const hasSpecificKeyword = ['跳舞', '换衣服', '换背景', '唱歌', '说话'].some(k => userInput.includes(k));
+
+    // 多素材 + 没有具体关键词 = 需要追问
+    return hasVagueKeyword && !hasSpecificKeyword;
+  }
+
+  /**
+   * 生成追问问题
+   * 
+   * @param {Array} materials - 素材列表
+   * @returns {Object} 追问内容 {questions, options}
+   */
+  generateClarificationQuestions(materials) {
+    const images = materials.filter(m => m.type === 'image');
+    const videos = materials.filter(m => m.type === 'video');
+
+    const questions = [];
+
+    if (images.length > 1) {
+      questions.push({
+        id: 'mainImage',
+        text: '哪张图片是主要人物？',
+        options: images.map((m, i) => ({ label: `图片${i + 1}`, value: i }))
+      });
+    }
+
+    if (videos.length > 0) {
+      questions.push({
+        id: 'videoRole',
+        text: '视频是用来做什么的？',
+        options: [
+          { label: '动作参考', value: 'motion' },
+          { label: '场景参考', value: 'scene' },
+          { label: '其他', value: 'other' }
+        ]
+      });
+    }
+
+    return questions;
+  }
+
+  /**
+   * Seedance 2.0 全能参考模式提示词改写
+   * 
+   * @param {string} userInput - 用户输入的模糊需求
+   * @param {Object} materials - 已上传的素材信息
+   * @param {Array<{type: string, name: string}>} materials.images - 图片素材
+   * @param {Array<{type: string, name: string}>} materials.videos - 视频素材
+   * @param {Array<{type: string, name: string}>} materials.audios - 音频素材
+   * @returns {Promise<{prompt: string, reason: string, duration: number, aspectRatio: string}>}
+   */
+  async rewritePromptForSeedance(userInput, materials = { images: [], videos: [], audios: [] }) {
+    // 智能推断素材用途
+    const allMaterials = [
+      ...(materials.images || []),
+      ...(materials.videos || []),
+      ...(materials.audios || []),
+    ];
+
+    const inferredMaterials = this.inferMaterialUsage(userInput, allMaterials);
+
+    // 检查是否需要追问
+    if (this.needsClarification(userInput, inferredMaterials)) {
+      const questions = this.generateClarificationQuestions(inferredMaterials);
+      return {
+        needsClarification: true,
+        questions,
+        materials: inferredMaterials,
+        prompt: '',
+        reason: '',
+        duration: 5,
+        aspectRatio: '16:9',
+      };
+    }
+
+    // 正常生成提示词
+    const materialDesc = inferredMaterials.map((m, i) => {
+      const ref = m.type === 'image' ? `@图片${i + 1}` : 
+                  m.type === 'video' ? `@视频${i + 1}` : `@音频${i + 1}`;
+      return `${ref}（${m.description}）`;
+    }).join('、');
+
+    const materialInfo = materialDesc.length > 0 
+      ? `\n\n## 已上传素材\n${materialDesc.join('\n')}`
+      : '\n\n## 已上传素材\n无';
+
+    const userContent = userInput + materialInfo;
+
+    const body = JSON.stringify({
+      model: this.model,
+      messages: [
+        { role: 'system', content: SEEDANCE_SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+    });
+
+    return new Promise((resolve, reject) => {
+      const url = new URL(this.baseUrl);
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.error) {
+              reject(new Error(json.error.message || 'API 错误'));
+              return;
+            }
+            const content = json.choices?.[0]?.message?.content;
+            if (!content) {
+              reject(new Error('AI 返回空内容'));
+              return;
+            }
+
+            const task = this._parseResponse(content);
+            // 确保有 reason 字段
+            if (!task.reason) {
+              task.reason = '已根据你的需求优化提示词';
+            }
+            resolve(task);
+          } catch (err) {
+            reject(new Error(`解析失败: ${err.message}`));
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+
+  _parseResponse(content) {
+    // 尝试直接解析
+    try {
+      return JSON.parse(content);
+    } catch {}
+
+    // 尝试从 markdown 代码块中提取
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch {}
+    }
+
+    // 尝试找 { } 包裹的内容
+    const braceMatch = content.match(/\{[\s\S]*\}/);
+    if (braceMatch) {
+      try {
+        return JSON.parse(braceMatch[0]);
+      } catch {}
+    }
+
+    // 兜底：把用户输入当 prompt
+    return {
+      prompt: content,
+      duration: 5,
+      aspectRatio: '16:9',
+      type: 'video',
+      style: '默认',
+    };
+  }
+
+  /**
+   * 第一步：批量任务拆解计划
+   * 根据用户需求，拆解成具体的任务计划（不生成提示词）
+   *
+   * @param {string} userInput - 用户输入的批量需求
+   * @param {Object} materials - 已上传的素材信息
+   * @returns {Promise<{subject: string, count: number, variations: Array, reasoning: string, questions?: Array}>}
+   */
+  async planBatchTasks(userInput, materials = { images: [], videos: [], audios: [] }) {
+    const PLAN_SYSTEM_PROMPT = `你是批量视频任务规划专家。用户描述需求，你输出拆解计划。
+
+输出格式（严格 JSON）：
+{
+  "subject": "核心主体（人物/形象）",
+  "count": 3,
+  "variations": [
+    { "action": "挠屁股", "style": "轻松自然", "description": "卡通形象轻轻挠挠屁股" },
+    { "action": "摇头", "style": "可爱生动", "description": "左右摇摇头" }
+  ],
+  "reasoning": "拆解逻辑说明",
+  "questions": []
+}
+
+规则：
+1. count 不超过 20
+2. 每个 variation 必须有差异化
+3. 如果用户信息不足，返回 questions 字段列出追问
+4. variations 数组中的每个元素包含：action（动作）、style（风格）、description（详细描述）
+5. subject 是核心主体，保持一致性
+6. 如果有素材参考，在 reasoning 中说明如何利用素材`;
+
+    // 构建素材描述
+    const materialDesc = [];
+    if (materials.images?.length > 0) {
+      materialDesc.push(`图片素材：${materials.images.map((m, i) => `图片${i + 1}（${m.name}）`).join('、')}`);
+    }
+    if (materials.videos?.length > 0) {
+      materialDesc.push(`视频素材：${materials.videos.map((m, i) => `视频${i + 1}（${m.name}）`).join('、')}`);
+    }
+    if (materials.audios?.length > 0) {
+      materialDesc.push(`音频素材：${materials.audios.map((m, i) => `音频${i + 1}（${m.name}）`).join('、')}`);
+    }
+
+    const materialInfo = materialDesc.length > 0
+      ? `\n\n## 已上传素材\n${materialDesc.join('\n')}`
+      : '';
+
+    const userContent = userInput + materialInfo;
+
+    const body = JSON.stringify({
+      model: this.model,
+      messages: [
+        { role: 'system', content: PLAN_SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500,
+    });
+
+    return new Promise((resolve, reject) => {
+      const url = new URL(this.baseUrl);
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.error) {
+              reject(new Error(json.error.message || 'API 错误'));
+              return;
+            }
+            const content = json.choices?.[0]?.message?.content;
+            if (!content) {
+              reject(new Error('AI 返回空内容'));
+              return;
+            }
+            const result = this._parseResponse(content);
+            resolve(result);
+          } catch (err) {
+            reject(new Error(`解析失败: ${err.message}`));
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+
+  /**
+   * 第二步：批量任务生成（两步调用）
+   * 先调用 planBatchTasks 获取拆解计划，再基于计划逐条调用 rewritePromptForSeedance
+   *
+   * @param {string} userInput - 用户输入的批量需求
+   * @param {Object} materials - 已上传的素材信息
+   * @returns {Promise<{success: boolean, batchName: string, description: string, tasks: Array}>}
+   */
+  async generateBatchTasks(userInput, materials = { images: [], videos: [], audios: [] }) {
+    // 第一步：获取拆解计划
+    const plan = await this.planBatchTasks(userInput, materials);
+
+    // 如果有问题需要追问，返回问题列表
+    if (plan.questions && plan.questions.length > 0) {
+      return {
+        success: false,
+        batchName: plan.subject || '批量任务',
+        description: plan.reasoning || '',
+        tasks: [],
+        questions: plan.questions,
+      };
+    }
+
+    // 第二步：基于计划逐条生成提示词
+    const tasks = [];
+    for (const variation of plan.variations || []) {
+      try {
+        // 构建单个任务的输入
+        const taskInput = `${plan.subject}，${variation.description}。风格：${variation.style}`;
+
+        // 调用 rewritePromptForSeedance 生成提示词
+        const taskPrompt = await this.rewritePromptForSeedance(taskInput, materials);
+
+        tasks.push({
+          prompt: taskPrompt.prompt,
+          reason: variation.action,
+          expectedEffect: variation.description,
+          duration: taskPrompt.duration || 5,
+          aspectRatio: taskPrompt.aspectRatio || '16:9',
+        });
+      } catch (err) {
+        // 单个任务失败不影响其他任务，跳过并继续
+        console.error(`生成任务失败 [${variation.action}]:`, err.message);
+      }
+    }
+
+    return {
+      success: true,
+      batchName: plan.subject || '批量任务',
+      description: plan.reasoning || '',
+      tasks,
+    };
+  }
+}
+
+module.exports = { AIService };
