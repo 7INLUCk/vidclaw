@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal } from 'lucide-react';
-import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type BatchTaskItem } from '../store';
+import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { PromptTemplates } from './PromptTemplates';
 
@@ -1183,6 +1183,7 @@ export function ChatPanel() {
     statusText, setStatusText,
     guidedStep, setGuidedStep,
     taskMode, setTaskMode,
+    sendMode, setSendMode,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -1282,21 +1283,6 @@ export function ChatPanel() {
     };
   }, [loginPollTimer]);
 
-  // 确保 logged-in-ready 时始终显示模式选择卡片
-  useEffect(() => {
-    if (guidedStep === 'logged-in-ready') {
-      const hasModeSelect = messages.some(m => m.type === 'mode-select');
-      if (!hasModeSelect) {
-        addMessage({
-          id: Date.now().toString() + '_auto_mode',
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          type: 'mode-select',
-        });
-      }
-    }
-  }, [guidedStep]);
 
   // ── Guide flow handlers ──
   async function handleReady() {
@@ -1476,64 +1462,16 @@ export function ChatPanel() {
     if (!input.trim() || isSubmitting) return;
     if (guidedStep === 'task-confirming') return;
 
-    // ===== 批量任务模式 =====
-    if (guidedStep === 'batch-collecting') {
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: input.trim(),
-        timestamp: new Date(),
-      };
-      addMessage(userMsg);
-      setInput('');
-      setSubmitting(true);
-      setStatusText('🧠 AI 正在规划批量任务...');
-
-      try {
-        const result = await window.api.prepareBatchTasks(userMsg.content);
-        console.log('[批量任务] AI 返回:', result);
-
-        if (!result.success || !result.tasks || result.tasks.length === 0) {
-          addMessage({
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: `❌ ${result.error || '批量任务生成失败,请重试'}`,
-            timestamp: new Date(),
-            type: 'error',
-          });
-          setGuidedStep('logged-in-ready');
-        } else {
-          setGuidedStep('task-confirming');
-          addMessage({
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: '',
-            timestamp: new Date(),
-            type: 'batch-confirm',
-            data: {
-              batchName: result.batchName || '批量任务',
-              description: result.description || '',
-              tasks: result.tasks,
-            },
-          });
-        }
-      } catch (err) {
-        addMessage({
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `❌ 出错了: ${err}`,
-          timestamp: new Date(),
-          type: 'error',
-        });
-        setGuidedStep('logged-in-ready');
-      } finally {
-        setSubmitting(false);
-        setStatusText('');
-      }
+    if (sendMode === 'ai-batch') {
+      await handleBatchSend();
+      return;
+    }
+    if (sendMode === 'direct') {
+      await handleDirectSend();
       return;
     }
 
-    // ===== 单个任务模式 =====
+    // ===== AI 单个任务模式 =====
     // 构建素材信息(用于 Seedance 模式改写)
     const materials = {
       images: [] as Array<{ type: string; name: string; path: string }>,
@@ -1657,6 +1595,134 @@ export function ChatPanel() {
     } finally {
       setSubmitting(false);
       setIsAiThinking(false);
+      setStatusText('');
+    }
+  }
+
+  // ===== 批量任务发送 =====
+  async function handleBatchSend() {
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    };
+    addMessage(userMsg);
+    setInput('');
+    setSubmitting(true);
+    setTaskMode('batch');
+    setGuidedStep('task-drafting');
+    setStatusText('🧠 AI 正在规划批量任务...');
+
+    try {
+      const result = await window.api.prepareBatchTasks(userMsg.content);
+      if (!result.success || !result.tasks || result.tasks.length === 0) {
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `❌ ${result.error || '批量任务生成失败，请重试'}`,
+          timestamp: new Date(),
+          type: 'error',
+        });
+        setGuidedStep('logged-in-ready');
+        setTaskMode('single');
+      } else {
+        setGuidedStep('task-confirming');
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          type: 'batch-confirm',
+          data: {
+            batchName: result.batchName || '批量任务',
+            description: result.description || '',
+            tasks: result.tasks,
+          },
+        });
+      }
+    } catch (err) {
+      addMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ 出错了: ${err}`,
+        timestamp: new Date(),
+        type: 'error',
+      });
+      setGuidedStep('logged-in-ready');
+      setTaskMode('single');
+    } finally {
+      setSubmitting(false);
+      setStatusText('');
+    }
+  }
+
+  // ===== 直接发送（跳过 AI 改写）=====
+  async function handleDirectSend() {
+    const prompt = input.trim();
+    const filesToSubmit = [...selectedFiles];
+    const hasFiles = filesToSubmit.length > 0 && useStructuredFlow;
+
+    const fileListDesc = hasFiles ? filesToSubmit.map(f => f.split('/').pop()).join('、') : '';
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: prompt + (hasFiles ? `\n📎 ${fileListDesc}` : ''),
+      timestamp: new Date(),
+    };
+    addMessage(userMsg);
+    setInput('');
+    setSelectedFiles([]);
+    setSubmitting(true);
+    setGuidedStep('task-executing');
+    setStatusText('⏳ 正在提交任务...');
+
+    try {
+      let result;
+      if (hasFiles) {
+        const materials: TaskMaterial[] = filesToSubmit.map(f => ({
+          path: f,
+          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : 'image') as 'image' | 'video',
+        }));
+        setStatusText('📤 正在上传素材...');
+        result = await window.api.runStructuredTask({
+          prompt,
+          materials,
+          model: selectedModel,
+          duration: selectedDuration,
+          aspectRatio: selectedRatio,
+        });
+      } else {
+        result = await window.api.executeTask({ prompt });
+      }
+
+      if (result.success) {
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `✅ 任务已提交！即梦正在生成中，结果会自动展示。`,
+          timestamp: new Date(),
+        });
+      } else {
+        addMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `❌ 提交失败: ${result.error}`,
+          timestamp: new Date(),
+          type: 'error',
+        });
+      }
+    } catch (err) {
+      addMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `❌ 出错了: ${err}`,
+        timestamp: new Date(),
+        type: 'error',
+      });
+    } finally {
+      setSubmitting(false);
+      setGuidedStep('logged-in-ready');
       setStatusText('');
     }
   }
@@ -2321,7 +2387,18 @@ export function ChatPanel() {
 
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
-              <PillTag label="视频生成" icon={<Video size={10} />} />
+              <PillSelect
+                icon={sendMode === 'ai-single' ? <Sparkles size={10} /> : sendMode === 'ai-batch' ? <Layers size={10} /> : <Zap size={10} />}
+                label={sendMode === 'ai-single' ? 'AI 生成' : sendMode === 'ai-batch' ? 'AI 批量' : '直接发送'}
+                options={[
+                  { value: 'ai-single', label: '✨ AI 生成' },
+                  { value: 'ai-batch', label: '📋 AI 批量' },
+                  { value: 'direct', label: '⚡ 直接发送' },
+                ]}
+                value={sendMode}
+                onChange={(v) => setSendMode(v as SendMode)}
+                disabled={!canInput}
+              />
               <PillSelect
                 icon={<Zap size={10} />}
                 label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}

@@ -78,6 +78,9 @@ export interface BatchInfo {
 // 任务模式
 export type TaskMode = 'single' | 'batch';
 
+// 发送模式
+export type SendMode = 'ai-single' | 'ai-batch' | 'direct';
+
 // 模型配置
 export interface ModelConfig {
   key: string;
@@ -223,7 +226,8 @@ interface AppState {
   // UI 状态
   activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'results';
 
-  // 批量任务状态
+  // 发送模式 & 批量任务状态
+  sendMode: SendMode;
   taskMode: TaskMode;
   batchTasks: BatchTaskItem[];
   batchInfo: BatchInfo | null;
@@ -272,7 +276,8 @@ interface AppState {
   setProcessingQueue: (processing: boolean) => void;
   setSettings: (settings: Partial<Settings>) => void;
   setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'results') => void;
-  // 批量任务 Actions
+  // 发送模式 & 批量任务 Actions
+  setSendMode: (mode: SendMode) => void;
   setTaskMode: (mode: TaskMode) => void;
   setBatchTasks: (tasks: BatchTaskItem[]) => void;
   setBatchInfo: (info: BatchInfo | null) => void;
@@ -323,7 +328,10 @@ export const useStore = create<AppState>((set) => ({
 
   activePanel: 'chat',
 
-  // 批量任务初始状态
+  // 发送模式 & 批量任务初始状态
+  sendMode: (() => {
+    try { return (localStorage.getItem('vidclaw_send_mode') as SendMode) || 'ai-single'; } catch { return 'ai-single'; }
+  })() as SendMode,
   taskMode: 'single',
   batchTasks: [],
   batchInfo: null,
@@ -459,7 +467,11 @@ export const useStore = create<AppState>((set) => ({
     return { usage };
   }),
   
-  // 批量任务 Actions
+  // 发送模式 & 批量任务 Actions
+  setSendMode: (sendMode) => {
+    try { localStorage.setItem('vidclaw_send_mode', sendMode); } catch {}
+    set({ sendMode });
+  },
   setTaskMode: (taskMode) => set({ taskMode }),
   setBatchTasks: (batchTasks) => set({ batchTasks }),
   setBatchInfo: (batchInfo) => set({ batchInfo }),
