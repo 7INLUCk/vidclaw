@@ -1222,7 +1222,6 @@ export function ChatPanel() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('vidclaw_onboarded'));
   const [showMaterialLib, setShowMaterialLib] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [inputFocused, setInputFocused] = useState(false);
   const [viewFile, setViewFile] = useState<string | null>(null);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
 
@@ -2299,7 +2298,7 @@ export function ChatPanel() {
 
             {isSubmitting && (
               <div className="flex justify-start animate-fade-in">
-                <div className="bg-surface-2 border border-border-subtle rounded-md px-4 py-3 max-w-xs">
+                <div className="msg-ai rounded-md px-4 py-3 max-w-xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
                     <span className="text-xs text-text-muted">{isAiThinking ? 'AI 正在思考...' : (statusText || '处理中...')}</span>
@@ -2317,11 +2316,7 @@ export function ChatPanel() {
       {/* Jimeng-style unified input card */}
       {showInputArea && (
         <div className="px-4 py-3 flex-shrink-0">
-          <div className={`rounded-xl border transition-all duration-150 shadow-[0_2px_12px_rgba(0,0,0,0.35)] ${
-            inputFocused
-              ? 'border-brand/60 bg-surface-3'
-              : 'border-[oklch(0.38_0.01_250)] bg-surface-3 hover:border-[oklch(0.44_0.01_250)]'
-          }`}>
+          <div className="rounded-xl border border-border bg-surface-2 transition-all duration-200 input-card-focus shadow-[var(--shadow-card)]">
 
             {/* Main row: attachment stack (left, always) + textarea (right) */}
             <div className="flex gap-0 p-3 pb-2" style={{ overflow: 'visible' }}>
@@ -2343,8 +2338,6 @@ export function ChatPanel() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={canInput ? handleKeyDown : undefined}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
                 placeholder={
                   !canInput ? '请先完成当前步骤...' :
                   sendMode === 'ai-batch' ? '描述这次要批量生成什么，比如：5 个不同风格的产品展示视频…' :
@@ -2370,7 +2363,7 @@ export function ChatPanel() {
             )}
 
             {/* Bottom toolbar */}
-            <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
+            <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border-subtle">
               <PillSelect
                 icon={sendMode === 'ai-single' ? <Sparkles size={10} /> : sendMode === 'ai-batch' ? <Layers size={10} /> : <Zap size={10} />}
                 label={sendMode === 'ai-single' ? '智能生成' : sendMode === 'ai-batch' ? '批量规划' : '专业模式'}
@@ -2525,7 +2518,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   if (msg.type === 'guide-button' && onGuideClick) {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 msg-ai text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
           <div className="mt-3">
             <GuideButton label="准备好了" onClick={onGuideClick} />
@@ -2539,7 +2532,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   if (msg.type === 'login-loading') {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 msg-ai text-text-primary">
           <div className="flex items-center gap-2 text-sm text-text-muted">
             <span className="inline-flex gap-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:0ms]" />
@@ -2559,7 +2552,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
     const scanning = !!msg.data?.scanning;
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-md px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary">
+        <div className="max-w-[85%] rounded-md px-4 py-3 msg-ai text-text-primary">
           <p className="text-sm whitespace-pre-wrap leading-relaxed mb-3">{msg.content}</p>
 
           {/* QR 图 or 验证中状态 */}
@@ -2807,7 +2800,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
             ? 'bg-brand text-white'
             : msg.type === 'error'
             ? 'bg-error/10 text-error border border-error/20'
-            : 'bg-surface-2 border border-border-subtle text-text-primary'
+            : 'msg-ai text-text-primary'
         }`}
       >
         <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>

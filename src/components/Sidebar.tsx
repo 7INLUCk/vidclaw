@@ -16,11 +16,11 @@ export function Sidebar() {
   ];
 
   return (
-    <aside 
+    <aside
       className="w-[56px] flex flex-col items-center py-3 flex-shrink-0"
       style={{
-        background: 'var(--color-surface)',
-        borderRight: '1px solid var(--color-border)'
+        background: 'var(--color-surface-1)',
+        borderRight: '1px solid var(--color-border-subtle)'
       }}
     >
       {/* Logo */}
@@ -44,25 +44,25 @@ export function Sidebar() {
             <button
               key={item.id}
               onClick={() => setActivePanel(item.id)}
-              className="relative w-full h-12 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 group"
+              className={`relative w-full h-12 flex flex-col items-center justify-center gap-0.5 transition-all duration-150 group${isActive ? ' nav-active-indicator' : ''}`}
               style={{
                 borderRadius: 'var(--radius-md)',
                 color: isActive ? 'var(--color-brand)' : 'var(--color-text-muted)',
-                background: isActive ? 'var(--color-surface-2)' : 'transparent'
+                background: isActive ? 'oklch(0.62 0.22 282 / 0.10)' : 'transparent',
               }}
             >
               <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} />
-              <span style={{ fontSize: '10px', fontWeight: isActive ? 500 : 400, lineHeight: 1 }}>
+              <span style={{ fontSize: '10px', fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>
                 {item.label}
               </span>
               
               {/* Hover background */}
               {!isActive && (
-                <span 
+                <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity -z-10"
                   style={{
                     borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-surface-2)'
+                    background: 'var(--color-surface-3)'
                   }}
                 />
               )}
