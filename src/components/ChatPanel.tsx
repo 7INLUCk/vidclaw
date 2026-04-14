@@ -504,7 +504,7 @@ function ProgressMessage({ msg }: { msg: Message }) {
 function PillSelect({ label, icon, options, value, onChange, disabled }: {
   label: string;
   icon?: React.ReactNode;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; desc?: string }[];
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
@@ -533,18 +533,23 @@ function PillSelect({ label, icon, options, value, onChange, disabled }: {
         <ChevronDown size={10} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute bottom-full mb-1.5 left-0 bg-surface-3 border border-border rounded-lg shadow-lg z-20 py-1 min-w-[100px]">
+        <div className="absolute bottom-full mb-1.5 left-0 bg-surface-3 border border-border rounded-lg shadow-lg z-20 py-1 min-w-[120px]">
           {options.map(opt => (
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`w-full px-3 py-1.5 text-left text-xs transition-colors ${
+              className={`w-full px-3 py-2 text-left transition-colors ${
                 opt.value === value
                   ? 'text-brand bg-brand/10'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-2'
               }`}
             >
-              {opt.label}
+              <div className="text-xs">{opt.label}</div>
+              {opt.desc && (
+                <div className={`text-[10px] mt-0.5 leading-tight ${opt.value === value ? 'text-brand/70' : 'text-text-muted'}`}>
+                  {opt.desc}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -2366,7 +2371,12 @@ export function ChatPanel() {
                 onKeyDown={canInput ? handleKeyDown : undefined}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
-                placeholder={canInput ? '描述你想生成的视频...' : '请先完成当前步骤...'}
+                placeholder={
+                  !canInput ? '请先完成当前步骤...' :
+                  sendMode === 'ai-batch' ? '描述这次要批量生成什么，比如：5 个不同风格的产品展示视频…' :
+                  sendMode === 'direct' ? '直接输入 Seedance 提示词，按工具栏参数执行…' :
+                  '描述你想生成的视频效果，比如：黄昏海边的慢镜头，温暖色调…'
+                }
                 rows={3}
                 className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder-text-secondary leading-relaxed"
                 style={{ minHeight: '68px', maxHeight: '160px' }}
@@ -2389,11 +2399,11 @@ export function ChatPanel() {
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
               <PillSelect
                 icon={sendMode === 'ai-single' ? <Sparkles size={10} /> : sendMode === 'ai-batch' ? <Layers size={10} /> : <Zap size={10} />}
-                label={sendMode === 'ai-single' ? 'AI 生成' : sendMode === 'ai-batch' ? 'AI 批量' : '直接发送'}
+                label={sendMode === 'ai-single' ? '智能生成' : sendMode === 'ai-batch' ? '批量规划' : '专业模式'}
                 options={[
-                  { value: 'ai-single', label: '✨ AI 生成' },
-                  { value: 'ai-batch', label: '📋 AI 批量' },
-                  { value: 'direct', label: '⚡ 直接发送' },
+                  { value: 'ai-single', label: '✨ 智能生成', desc: '描述想法，AI 帮你优化成提示词' },
+                  { value: 'ai-batch', label: '📋 批量规划', desc: '描述项目目标，AI 自动拆解成多个任务' },
+                  { value: 'direct', label: '⚡ 专业模式', desc: '自己写好提示词，直接发送' },
                 ]}
                 value={sendMode}
                 onChange={(v) => setSendMode(v as SendMode)}
