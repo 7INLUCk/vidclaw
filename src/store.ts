@@ -37,7 +37,7 @@ export interface Settings {
 // 结构化任务的素材
 export interface TaskMaterial {
   path: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
 }
 
 // 结构化任务的 meta 引用项

@@ -541,7 +541,11 @@ class AIService {
    * @param {Object} materials - 已上传的素材信息
    * @returns {Promise<{success: boolean, batchName: string, description: string, tasks: Array}>}
    */
-  async generateBatchTasks(userInput, materials = { images: [], videos: [], audios: [] }) {
+  async generateBatchTasks(userInput, materials = { images: [], videos: [], audios: [] }, defaults = {}) {
+    const defaultModel = defaults.model || 'seedance2.0fast';
+    const defaultDuration = defaults.duration || 5;
+    const defaultAspectRatio = defaults.aspectRatio || '16:9';
+
     // 第一步：获取拆解计划
     const plan = await this.planBatchTasks(userInput, materials);
 
@@ -555,6 +559,13 @@ class AIService {
         questions: plan.questions,
       };
     }
+
+    // 所有素材合并为扁平列表（每个子任务共享相同的参考素材）
+    const allMaterialsList = [
+      ...(materials.images || []),
+      ...(materials.videos || []),
+      ...(materials.audios || []),
+    ];
 
     // 第二步：基于计划逐条生成提示词
     const tasks = [];
@@ -570,8 +581,13 @@ class AIService {
           prompt: taskPrompt.prompt,
           reason: variation.action,
           expectedEffect: variation.description,
-          duration: taskPrompt.duration || 5,
-          aspectRatio: taskPrompt.aspectRatio || '16:9',
+          // 模型固定用工具栏选择的，不让 AI 自行决定
+          model: defaultModel,
+          // 时长/比例：AI 可以根据内容调整，否则沿用工具栏默认值
+          duration: taskPrompt.duration || defaultDuration,
+          aspectRatio: taskPrompt.aspectRatio || defaultAspectRatio,
+          // 所有子任务共享参考素材
+          materials: allMaterialsList,
         });
       } catch (err) {
         // 单个任务失败不影响其他任务，跳过并继续

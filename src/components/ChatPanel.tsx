@@ -1616,21 +1616,49 @@ export function ChatPanel() {
 
   // ===== 批量任务发送 =====
   async function handleBatchSend() {
+    // 构建素材信息（与 ai-single 模式一致，所有子任务共享参考素材）
+    const batchMaterials = {
+      images: [] as Array<{ type: string; name: string; path: string }>,
+      videos: [] as Array<{ type: string; name: string; path: string }>,
+      audios: [] as Array<{ type: string; name: string; path: string }>,
+    };
+    let imgIdx = 0, vidIdx = 0, audIdx = 0;
+    selectedFiles.forEach(f => {
+      if (/\.(mp4|mov|avi|webm)$/i.test(f)) {
+        vidIdx++;
+        batchMaterials.videos.push({ type: 'video', name: `视频${vidIdx}`, path: f });
+      } else if (/\.(mp3|wav|aac|m4a|flac)$/i.test(f)) {
+        audIdx++;
+        batchMaterials.audios.push({ type: 'audio', name: `音频${audIdx}`, path: f });
+      } else {
+        imgIdx++;
+        batchMaterials.images.push({ type: 'image', name: `图片${imgIdx}`, path: f });
+      }
+    });
+
+    const hasFiles = selectedFiles.length > 0;
+    const fileListDesc = hasFiles
+      ? [...batchMaterials.images, ...batchMaterials.videos, ...batchMaterials.audios].map(m => m.name).join('、')
+      : '';
+
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input.trim(),
+      content: input.trim() + (hasFiles ? `\n📎 ${fileListDesc}` : ''),
       timestamp: new Date(),
     };
     addMessage(userMsg);
     setInput('');
+    setSelectedFiles([]);
     setSubmitting(true);
     setTaskMode('batch');
     setGuidedStep('task-drafting');
     setStatusText('🧠 AI 正在规划批量任务...');
 
+    const batchDefaults = { model: selectedModel, duration: selectedDuration, aspectRatio: selectedRatio };
+
     try {
-      const result = await window.api.prepareBatchTasks(userMsg.content);
+      const result = await window.api.prepareBatchTasks(userMsg.content, batchMaterials, batchDefaults);
       if (!result.success || !result.tasks || result.tasks.length === 0) {
         addMessage({
           id: (Date.now() + 1).toString(),
@@ -1697,7 +1725,7 @@ export function ChatPanel() {
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
-          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : 'image') as 'image' | 'video',
+          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image') as 'image' | 'video' | 'audio',
         }));
         setStatusText('📤 正在上传素材...');
         result = await window.api.runStructuredTask({
@@ -1771,7 +1799,7 @@ export function ChatPanel() {
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
-          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : 'image') as 'image' | 'video',
+          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image') as 'image' | 'video' | 'audio',
         }));
 
         setStatusText('📤 正在上传素材...');
@@ -1888,7 +1916,7 @@ export function ChatPanel() {
         index: i,
         prompt: t.prompt || '',
         reason: t.reason || '',
-        materials: [],
+        materials: t.materials || [],
         expectedEffect: t.expectedEffect || '',
         duration: t.duration || 5,
         aspectRatio: t.aspectRatio || '9:16',

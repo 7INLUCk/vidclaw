@@ -560,17 +560,20 @@ function registerIpcHandlers() {
   });
 
   // ---- 批量任务生成 ----
-  ipcMain.handle('task:prepare-batch', async (_event, input) => {
-    console.log('[批量准备] 输入:', input?.slice?.(0, 100));
+  ipcMain.handle('task:prepare-batch', async (_event, payload) => {
+    const input = typeof payload === 'string' ? payload : (payload?.input || '');
+    const materials = (typeof payload === 'object' && payload?.materials) || { images: [], videos: [], audios: [] };
+    const defaults = (typeof payload === 'object' && payload?.defaults) || {};
+    console.log('[批量准备] 输入:', input?.slice?.(0, 100), '素材:', JSON.stringify(materials).slice(0, 100));
 
     try {
       const ai = ensureAIService();
-      const result = await ai.generateBatchTasks(input);
+      const result = await ai.generateBatchTasks(input, materials, defaults);
       return { success: true, ...result };
     } catch (err) {
       console.error('[批量准备] 失败:', err.message);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: err.message,
         questions: ['请告诉我这次批量测试的目标是什么？', '你想生成多少个视频？']
       };
@@ -639,13 +642,15 @@ function registerIpcHandlers() {
     // 构造素材参数
     const args = ['multimodal2video', '--prompt=' + prompt, '--duration=' + duration, '--ratio=' + ratio, '--model_version=' + model];
 
-    // 添加素材文件路径（image≤9, video≤3）
+    // 添加素材文件路径（image≤9, video≤3, audio≤3）
     if (materials && materials.length > 0) {
       const images = materials.filter(m => m.type === 'image').slice(0, 9);
       const videos = materials.filter(m => m.type === 'video').slice(0, 3);
-      
+      const audios = materials.filter(m => m.type === 'audio').slice(0, 3);
+
       images.forEach(img => args.push('--image=' + img.path));
       videos.forEach(vid => args.push('--video=' + vid.path));
+      audios.forEach(aud => args.push('--audio=' + aud.path));
     }
 
     console.log('[CLI] 执行:', args.join(' '));

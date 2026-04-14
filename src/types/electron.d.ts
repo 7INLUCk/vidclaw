@@ -19,7 +19,7 @@ declare global {
       prepareTask: (input: string) => Promise<{ success: boolean; task?: any; error?: string }>;
       executeTask: (task: any) => Promise<{ success: boolean; message?: string; error?: string }>;
       prepareTaskForSeedance: (input: string, materials: { images?: any[]; videos?: any[]; audios?: any[] }) => Promise<{ success: boolean; task?: any; materials?: any; error?: string }>;
-      prepareBatchTasks: (input: string) => Promise<{ success: boolean; batchName?: string; description?: string; tasks?: any[]; questions?: string[]; error?: string }>;
+      prepareBatchTasks: (input: string, materials?: { images: any[]; videos: any[]; audios: any[] }, defaults?: { model?: string; duration?: number; aspectRatio?: string }) => Promise<{ success: boolean; batchName?: string; description?: string; tasks?: any[]; questions?: string[]; error?: string }>;
 
       // 任务（兼容旧接口）
       submitTask: (input: string) => Promise<{ success: boolean; message?: string; error?: string }>;

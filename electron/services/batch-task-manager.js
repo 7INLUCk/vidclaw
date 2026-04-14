@@ -256,12 +256,14 @@ class BatchTaskManager {
           '--ratio=' + pendingTask.aspectRatio,
           '--model_version=' + pendingTask.model,
         ];
-        
-        // 添加素材
+
+        // 添加素材（image≤9, video≤3, audio≤3）
         const images = pendingTask.materials.filter(m => m.type === 'image').slice(0, 9);
         const videos = pendingTask.materials.filter(m => m.type === 'video').slice(0, 3);
+        const audios = pendingTask.materials.filter(m => m.type === 'audio').slice(0, 3);
         images.forEach(img => args.push('--image=' + img.path));
         videos.forEach(vid => args.push('--video=' + vid.path));
+        audios.forEach(aud => args.push('--audio=' + aud.path));
       } else {
         // text2video
         args = [
