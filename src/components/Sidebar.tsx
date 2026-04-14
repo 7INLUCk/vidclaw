@@ -1,8 +1,8 @@
-import { MessageSquare, Layers, Settings, Clock, PawPrint } from 'lucide-react';
+import { MessageSquare, Layers, Settings, Clock, PawPrint, Zap } from 'lucide-react';
 import { useStore } from '../store';
 
 export function Sidebar() {
-  const { activePanel, setActivePanel, tasks, isSubmitting } = useStore();
+  const { activePanel, setActivePanel, tasks, isSubmitting, skills } = useStore();
 
   const activeTaskCount = tasks.filter(t =>
     ['generating', 'queued', 'pending', 'uploading'].includes(t.status)
@@ -12,6 +12,7 @@ export function Sidebar() {
     { id: 'chat' as const, icon: MessageSquare, label: '对话', badge: isSubmitting ? '...' : null },
     { id: 'queue' as const, icon: Layers, label: '队列', badge: activeTaskCount > 0 ? String(activeTaskCount) : null },
     { id: 'history' as const, icon: Clock, label: '作品', badge: null },
+    { id: 'skills' as const, icon: Zap, label: '技能', badge: skills.length > 0 ? String(skills.length) : null },
     { id: 'settings' as const, icon: Settings, label: '设置', badge: null },
   ];
 

@@ -118,6 +118,33 @@ export interface TaskRecord {
 
 export type TaskFilter = 'all' | 'active' | 'completed' | 'failed';
 
+// ===== 技能 =====
+export interface SkillTask {
+  prompt: string;
+  expectedEffect?: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  type: 'single' | 'batch';
+  model: string;
+  duration: number;
+  aspectRatio: string;
+  tasks: SkillTask[];
+  createdAt: number;
+  updatedAt: number;
+  usedCount: number;
+  prevVersion?: {
+    tasks: SkillTask[];
+    model: string;
+    duration: number;
+    aspectRatio: string;
+    updatedAt: number;
+  };
+}
+
 // ===== 作品历史 =====
 export interface HistoryItem {
   id: string;
@@ -192,7 +219,7 @@ interface AppState {
   settingsLoaded: boolean;
 
   // UI 状态
-  activePanel: 'chat' | 'queue' | 'settings' | 'history';
+  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'skills';
 
   // 发送模式 & 批量任务状态
   sendMode: SendMode;
@@ -208,6 +235,9 @@ interface AppState {
   history: HistoryItem[];
   // 素材库
   materials: SavedMaterial[];
+  // 技能
+  skills: Skill[];
+  activeSkill: Skill | null;
   // 用量统计
   usage: UsageStats;
   // 视频预览
@@ -229,7 +259,7 @@ interface AppState {
   setSubmitting: (submitting: boolean) => void;
   setStatusText: (text: string) => void;
   setSettings: (settings: Partial<Settings>) => void;
-  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history') => void;
+  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'skills') => void;
   // 发送模式 & 批量任务 Actions
   setSendMode: (mode: SendMode) => void;
   setTaskMode: (mode: TaskMode) => void;
@@ -249,6 +279,11 @@ interface AppState {
   // 素材库 Actions
   addMaterial: (item: SavedMaterial) => void;
   removeMaterial: (id: string) => void;
+  // 技能 Actions
+  addSkill: (skill: Skill) => void;
+  updateSkill: (id: string, updates: Partial<Skill>) => void;
+  deleteSkill: (id: string) => void;
+  setActiveSkill: (skill: Skill | null) => void;
   // 用量 Actions
   updateUsage: (updates: Partial<UsageStats>) => void;
 }
@@ -303,6 +338,14 @@ export const useStore = create<AppState>((set) => ({
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   })(),
+  // 技能
+  skills: (() => {
+    try {
+      const saved = localStorage.getItem('vidclaw_skills');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  })(),
+  activeSkill: null,
   // 用量统计
   usage: (() => {
     try {
@@ -361,6 +404,23 @@ export const useStore = create<AppState>((set) => ({
     try { localStorage.setItem('vidclaw_materials', JSON.stringify(materials)); } catch {}
     return { materials };
   }),
+  // 技能 Actions
+  addSkill: (skill) => set((s) => {
+    const skills = [skill, ...s.skills];
+    try { localStorage.setItem('vidclaw_skills', JSON.stringify(skills)); } catch {}
+    return { skills };
+  }),
+  updateSkill: (id, updates) => set((s) => {
+    const skills = s.skills.map(sk => sk.id === id ? { ...sk, ...updates } : sk);
+    try { localStorage.setItem('vidclaw_skills', JSON.stringify(skills)); } catch {}
+    return { skills };
+  }),
+  deleteSkill: (id) => set((s) => {
+    const skills = s.skills.filter(sk => sk.id !== id);
+    try { localStorage.setItem('vidclaw_skills', JSON.stringify(skills)); } catch {}
+    return { skills };
+  }),
+  setActiveSkill: (activeSkill) => set({ activeSkill }),
   // 用量 Actions
   updateUsage: (updates) => set((s) => {
     const usage = { ...s.usage, ...updates };

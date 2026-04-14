@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal, Paperclip, FolderOpen } from 'lucide-react';
-import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem } from '../store';
+import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem, type Skill } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { localFileUrl, localFileUrlSync } from '../utils/localFile';
 
@@ -109,12 +109,18 @@ function BatchConfirmCard({
   materials,
   onConfirm,
   onEdit,
+  onSaveAsSkill,
+  onUpdateSkill,
+  activeSkillName,
 }: {
   batchName: string;
   description: string;
   materials: MaterialItem[];
   onConfirm: () => void;
   onEdit: () => void;
+  onSaveAsSkill?: () => void;
+  onUpdateSkill?: () => void;
+  activeSkillName?: string;
 }) {
   const batchTasks = useStore((s) => s.batchTasks);
   const setBatchTasks = useStore((s) => s.setBatchTasks);
@@ -316,7 +322,7 @@ function BatchConfirmCard({
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
           <button
             onClick={onConfirm}
             disabled={batchTasks.length === 0 || hasEmptyPrompts}
@@ -334,6 +340,24 @@ function BatchConfirmCard({
           </button>
           {hasEmptyPrompts && (
             <span className="text-[10px] text-warning ml-1">请填写所有提示词后提交</span>
+          )}
+          <div className="flex-1" />
+          {onUpdateSkill && activeSkillName && (
+            <button
+              onClick={onUpdateSkill}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] text-accent bg-accent/10 hover:bg-accent/20 rounded-md transition-all"
+              title={`更新技能「${activeSkillName}」`}
+            >
+              <span>⚡</span> 更新技能
+            </button>
+          )}
+          {onSaveAsSkill && (
+            <button
+              onClick={onSaveAsSkill}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] text-text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-all"
+            >
+              <span>⚡</span> 保存为技能
+            </button>
           )}
         </div>
       </div>
@@ -1058,7 +1082,7 @@ function GuideButton({ label, onClick, disabled, icon }: {
 // ── Confirm Card (left accent band + clean layout) ──
 function ConfirmCard({
   task, onConfirm, onEdit, hasFiles, selectedModel, selectedDuration, selectedRatio,
-  materials, onDurationChange, onRatioChange, onModelChange, onEditMaterial
+  materials, onDurationChange, onRatioChange, onModelChange, onEditMaterial, onSaveAsSkill, onUpdateSkill, activeSkillName,
 }: {
   task: any;
   onConfirm: (editedPrompt?: string) => void;
@@ -1072,6 +1096,9 @@ function ConfirmCard({
   onRatioChange?: (r: string) => void;
   onModelChange?: (m: string) => void;
   onEditMaterial?: (index: number, newDesc: string) => void;
+  onSaveAsSkill?: (prompt: string) => void;
+  onUpdateSkill?: (prompt: string) => void;
+  activeSkillName?: string;
 }) {
   const [showParamEditor, setShowParamEditor] = useState(false);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
@@ -1254,7 +1281,7 @@ function ConfirmCard({
             <p className="text-[10px] text-text-muted mb-3">📎 素材将随任务一起提交给即梦 CLI</p>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onConfirm(isEditingPrompt ? editedPrompt : undefined)}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 bg-brand hover:bg-brand/90 text-white hover:-translate-y-0.5"
@@ -1269,6 +1296,24 @@ function ConfirmCard({
               <RefreshCw size={14} />
               重新描述
             </button>
+            <div className="flex-1" />
+            {onUpdateSkill && activeSkillName && (
+              <button
+                onClick={() => onUpdateSkill(isEditingPrompt ? editedPrompt : (task.prompt || ''))}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] text-accent bg-accent/10 hover:bg-accent/20 rounded-md transition-all"
+                title={`更新技能「${activeSkillName}」`}
+              >
+                <span>⚡</span> 更新技能
+              </button>
+            )}
+            {onSaveAsSkill && (
+              <button
+                onClick={() => onSaveAsSkill(isEditingPrompt ? editedPrompt : (task.prompt || ''))}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] text-text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-all"
+              >
+                <span>⚡</span> 保存为技能
+              </button>
+            )}
           </div>
         </div>
     </div>
@@ -1466,6 +1511,7 @@ export function ChatPanel() {
   } = useStore();
   const addHistory = useStore(s => s.addHistory);
   const updateUsage = useStore(s => s.updateUsage);
+  const { addSkill, updateSkill, activeSkill, setActiveSkill } = useStore();
 
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -1488,6 +1534,11 @@ export function ChatPanel() {
   const [fileErrors, setFileErrors] = useState<string[]>([]);
   const [lastInput, setLastInput] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // ── 技能相关状态 ──
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [saveSkillContext, setSaveSkillContext] = useState<{ type: 'single' | 'batch'; prompt?: string } | null>(null);
+  const [saveSkillName, setSaveSkillName] = useState('');
 
   // ── 素材描述编辑处理 ──
   function handleEditMaterial(index: number, newDesc: string) {
@@ -1655,8 +1706,16 @@ export function ChatPanel() {
 
 
   async function handleSend() {
-    if (!input.trim() || isSubmitting) return;
+    if (isSubmitting) return;
     if (guidedStep === 'task-confirming') return;
+
+    // Skill mode: bypass AI, go directly to confirm card
+    if (activeSkill) {
+      handleSkillSend();
+      return;
+    }
+
+    if (!input.trim()) return;
 
     if (sendMode === 'ai-batch') {
       await handleBatchSend();
@@ -2221,6 +2280,174 @@ export function ChatPanel() {
     }, 50);
   }
 
+  // ── 技能应用 ──
+  function handleApplySkill(skill: Skill) {
+    setShowSkillPicker(false);
+    setActiveSkill(skill);
+    // Pre-fill params
+    setSelectedModel(skill.model);
+    setSelectedDuration(skill.duration);
+    setSelectedRatio(skill.aspectRatio);
+  }
+
+  function handleSkillSend() {
+    if (!activeSkill) return;
+    const skill = activeSkill;
+    setActiveSkill(null);
+
+    const flatMaterials = selectedFiles.map((f, idx) => {
+      const name = f.split('/').pop() || f;
+      const isVid = /\.(mp4|mov|avi|webm)$/i.test(f);
+      const isAud = /\.(mp3|wav|aac|m4a|flac)$/i.test(f);
+      const type = isVid ? 'video' : isAud ? 'audio' : 'image';
+      return { type, name: `${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}${idx + 1}`, path: f };
+    });
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `[应用技能] ${skill.name}`,
+      timestamp: new Date(),
+      ...(flatMaterials.length > 0 && { data: { materials: flatMaterials } }),
+    };
+    addMessage(userMsg);
+    setSelectedFiles([]);
+    setInput('');
+
+    if (skill.type === 'single' || skill.tasks.length === 1) {
+      // Single task — go directly to confirm card
+      setTaskMode('single');
+      setGuidedStep('task-confirming');
+      const imgs = flatMaterials.filter(m => m.type === 'image');
+      const vids = flatMaterials.filter(m => m.type === 'video');
+      const auds = flatMaterials.filter(m => m.type === 'audio');
+      const taskData = {
+        prompt: skill.tasks[0].prompt,
+        reason: `技能「${skill.name}」预设提示词`,
+        hasFiles: flatMaterials.length > 0,
+        selectedModel: skill.model,
+        selectedDuration: skill.duration,
+        selectedRatio: skill.aspectRatio,
+        materials: { images: imgs, videos: vids, audios: auds },
+      };
+      setPendingTask(taskData);
+      addMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        type: 'ai-rewrite',
+        data: taskData,
+      });
+    } else {
+      // Batch skill — go directly to batch confirm card
+      setTaskMode('batch');
+      const batchMaterials = flatMaterials.map(m => ({ path: m.path, type: m.type as 'image' | 'video' | 'audio' }));
+      const mappedTasks: BatchTaskItem[] = skill.tasks.map((t, i) => ({
+        id: `task_${Date.now()}_${i}`,
+        index: i,
+        prompt: t.prompt,
+        reason: '',
+        materials: batchMaterials,
+        expectedEffect: t.expectedEffect || '',
+        duration: skill.duration,
+        aspectRatio: skill.aspectRatio,
+        model: skill.model,
+        status: 'pending' as const,
+      }));
+      setBatchTasks(mappedTasks);
+      setGuidedStep('task-confirming');
+      addMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        type: 'batch-confirm',
+        data: {
+          batchName: skill.name,
+          description: `技能「${skill.name}」批量任务`,
+          materials: flatMaterials,
+        },
+      });
+    }
+  }
+
+  // ── 保存为技能 ──
+  function handleSaveSkill() {
+    if (!saveSkillName.trim() || !saveSkillContext) return;
+    const now = Date.now();
+    if (saveSkillContext.type === 'single') {
+      addSkill({
+        id: `skill_${now}`,
+        name: saveSkillName.trim(),
+        description: '',
+        type: 'single',
+        model: selectedModel,
+        duration: selectedDuration,
+        aspectRatio: selectedRatio,
+        tasks: [{ prompt: saveSkillContext.prompt || '' }],
+        createdAt: now,
+        updatedAt: now,
+        usedCount: 0,
+      });
+    } else {
+      const liveTasks = useStore.getState().batchTasks;
+      addSkill({
+        id: `skill_${now}`,
+        name: saveSkillName.trim(),
+        description: '',
+        type: 'batch',
+        model: liveTasks[0]?.model || selectedModel,
+        duration: liveTasks[0]?.duration || selectedDuration,
+        aspectRatio: liveTasks[0]?.aspectRatio || selectedRatio,
+        tasks: liveTasks.map(t => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
+        createdAt: now,
+        updatedAt: now,
+        usedCount: 0,
+      });
+    }
+    setSaveSkillContext(null);
+    setSaveSkillName('');
+  }
+
+  // ── 更新技能 ──
+  function handleUpdateSkill(prompt?: string) {
+    if (!activeSkill) return;
+    if (activeSkill.type === 'single') {
+      updateSkill(activeSkill.id, {
+        tasks: [{ prompt: prompt || activeSkill.tasks[0]?.prompt || '' }],
+        model: selectedModel,
+        duration: selectedDuration,
+        aspectRatio: selectedRatio,
+        updatedAt: Date.now(),
+        prevVersion: {
+          tasks: activeSkill.tasks,
+          model: activeSkill.model,
+          duration: activeSkill.duration,
+          aspectRatio: activeSkill.aspectRatio,
+          updatedAt: activeSkill.updatedAt,
+        },
+      });
+    } else {
+      const liveTasks = useStore.getState().batchTasks;
+      updateSkill(activeSkill.id, {
+        tasks: liveTasks.map(t => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
+        model: liveTasks[0]?.model || selectedModel,
+        duration: liveTasks[0]?.duration || selectedDuration,
+        aspectRatio: liveTasks[0]?.aspectRatio || selectedRatio,
+        updatedAt: Date.now(),
+        prevVersion: {
+          tasks: activeSkill.tasks,
+          model: activeSkill.model,
+          duration: activeSkill.duration,
+          aspectRatio: activeSkill.aspectRatio,
+          updatedAt: activeSkill.updatedAt,
+        },
+      });
+    }
+    setActiveSkill(null);
+  }
+
   // Listen for progress events
   useEffect(() => {
     console.log('[前端] 注册 onProgress 监听器');
@@ -2682,6 +2909,9 @@ export function ChatPanel() {
                   setMessages={setMessages}
                   setTaskMode={setTaskMode}
                   onInputRestore={() => setInput(lastInput)}
+                  onSaveAsSkill={msg.type === 'ai-rewrite' || msg.type === 'batch-confirm' ? (prompt?: string) => setSaveSkillContext({ type: msg.type === 'batch-confirm' ? 'batch' : 'single', prompt }) : undefined}
+                  onUpdateSkill={activeSkill && (msg.type === 'ai-rewrite' || msg.type === 'batch-confirm') ? (prompt?: string) => handleUpdateSkill(prompt) : undefined}
+                  activeSkillName={activeSkill?.name}
                 />
               </div>
             ))}
@@ -2708,6 +2938,18 @@ export function ChatPanel() {
         <div className="px-4 py-3 flex-shrink-0">
           <div className="rounded-xl border border-border bg-surface-2 transition-all duration-200 input-card-focus shadow-[var(--shadow-card)]">
 
+            {/* Active skill banner */}
+            {activeSkill && canInput && (
+              <div className="flex items-center gap-2 px-3 pt-2.5 pb-0">
+                <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-brand/10 border border-brand/20 rounded-md">
+                  <span className="text-brand text-xs">⚡</span>
+                  <span className="text-xs text-brand font-medium flex-1 truncate">{activeSkill.name}</span>
+                  <span className="text-[10px] text-text-muted">{activeSkill.tasks.length > 1 ? `批量 · ${activeSkill.tasks.length} 条` : '单个'} · {activeSkill.model === 'seedance2.0fast' ? 'Fast' : '2.0'} · {activeSkill.duration}s · {activeSkill.aspectRatio}</span>
+                  <button onClick={() => setActiveSkill(null)} className="text-text-muted hover:text-error transition-colors ml-1"><X size={12} /></button>
+                </div>
+              </div>
+            )}
+
             {/* Main row: attachment stack (only when files present) + textarea */}
             <div className="flex gap-0 p-3 pb-2" style={{ overflow: 'visible' }}>
 
@@ -2730,6 +2972,7 @@ export function ChatPanel() {
                 onKeyDown={canInput ? handleKeyDown : undefined}
                 placeholder={
                   !canInput ? '请先完成当前步骤...' :
+                  activeSkill ? `上传素材后直接发送，使用「${activeSkill.name}」技能生成...` :
                   sendMode === 'ai-batch' ? '描述这次要批量生成什么，比如：5 个不同风格的产品展示视频…' :
                   sendMode === 'direct' ? '直接输入 Seedance 提示词，按工具栏参数执行…' :
                   '描述你想生成的视频效果，比如：黄昏海边的慢镜头，温暖色调…'
@@ -2797,10 +3040,21 @@ export function ChatPanel() {
 
               <div className="flex-1" />
 
+              {/* ⚡ Skill button */}
+              <button
+                onClick={() => setShowSkillPicker(true)}
+                disabled={!canInput}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all disabled:opacity-30 ${activeSkill ? 'text-brand bg-brand/10 hover:bg-brand/20' : 'text-text-muted hover:text-brand hover:bg-brand/10'}`}
+                title="应用技能"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline">技能</span>
+              </button>
+
               {/* Send button */}
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || !canInput}
+                disabled={(!input.trim() && !activeSkill) || !canInput}
                 className="w-8 h-8 rounded-full bg-brand hover:bg-brand/90 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all active:scale-95"
               >
                 <ArrowUp size={15} />
@@ -2810,6 +3064,114 @@ export function ChatPanel() {
 
         </div>
       )}
+
+      {/* ── Skill Picker Modal ── */}
+      {showSkillPicker && (
+        <SkillPickerModal
+          onSelect={(skill) => handleApplySkill(skill)}
+          onClose={() => setShowSkillPicker(false)}
+        />
+      )}
+
+      {/* ── Save as Skill Modal ── */}
+      {saveSkillContext && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={() => { setSaveSkillContext(null); setSaveSkillName(''); }}>
+          <div
+            className="bg-surface-1 border border-border rounded-xl p-5 w-full max-w-sm shadow-2xl mx-4 mb-4 sm:mb-0"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-brand">⚡</span>
+              <h3 className="text-sm font-semibold text-text-primary">
+                保存为技能
+              </h3>
+              <span className="text-[10px] text-text-muted ml-1">
+                {saveSkillContext.type === 'batch' ? `批量 · ${useStore.getState().batchTasks.length} 条` : '单个任务'}
+              </span>
+            </div>
+            <input
+              value={saveSkillName}
+              onChange={e => setSaveSkillName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSaveSkill()}
+              placeholder="给这个技能起个名字..."
+              className="w-full bg-surface-2 border border-border rounded-md px-3 py-2 text-sm text-text-primary outline-none focus:border-brand transition-colors mb-4"
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setSaveSkillContext(null); setSaveSkillName(''); }}
+                className="px-4 py-2 text-xs text-text-secondary bg-surface-2 hover:bg-border rounded-md transition-all">
+                取消
+              </button>
+              <button
+                onClick={handleSaveSkill}
+                disabled={!saveSkillName.trim()}
+                className="px-4 py-2 text-xs text-white bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-all"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Skill Picker Modal ──
+function SkillPickerModal({ onSelect, onClose }: { onSelect: (skill: Skill) => void; onClose: () => void }) {
+  const skills = useStore(s => s.skills);
+  const setActivePanel = useStore(s => s.setActivePanel);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-surface-1 border border-border rounded-xl w-full max-w-sm mx-4 mb-4 sm:mb-0 shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+          <div className="flex items-center gap-2">
+            <span className="text-brand">⚡</span>
+            <h3 className="text-sm font-semibold text-text-primary">选择技能</h3>
+          </div>
+          <button onClick={() => { onClose(); setActivePanel('skills'); }}
+            className="text-[11px] text-brand hover:text-brand/80 transition-colors">
+            管理技能库 →
+          </button>
+        </div>
+
+        {skills.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <p className="text-sm text-text-muted mb-3">还没有保存任何技能</p>
+            <button
+              onClick={() => { onClose(); setActivePanel('skills'); }}
+              className="text-xs text-brand hover:underline"
+            >
+              前往技能库创建 →
+            </button>
+          </div>
+        ) : (
+          <div className="max-h-72 overflow-y-auto p-2">
+            {skills.map(skill => (
+              <button
+                key={skill.id}
+                onClick={() => onSelect(skill)}
+                className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-surface-2 transition-all text-left group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-brand/10 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-brand/20 transition-colors">
+                  <span className="text-brand text-xs">⚡</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">{skill.name}</p>
+                  <p className="text-[10px] text-text-muted mt-0.5">
+                    {skill.tasks.length > 1 ? `批量 · ${skill.tasks.length} 条` : '单个'} · {skill.duration}s · {skill.aspectRatio}
+                    {skill.usedCount > 0 && ` · 用了 ${skill.usedCount} 次`}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2854,7 +3216,7 @@ function getProgressText(step: GuidedStep): string {
   return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
 
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore, onSaveAsSkill, onUpdateSkill, activeSkillName }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -2874,6 +3236,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   setMessages?: (fn: (prev: Message[]) => Message[]) => void;
   setTaskMode?: (mode: any) => void;
   onInputRestore?: () => void;
+  onSaveAsSkill?: (prompt?: string) => void;
+  onUpdateSkill?: (prompt?: string) => void;
+  activeSkillName?: string;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -3057,6 +3422,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           materials={data?.materials || []}
           onConfirm={onConfirm || (() => {})}
           onEdit={onEdit || (() => {})}
+          onSaveAsSkill={onSaveAsSkill ? () => onSaveAsSkill() : undefined}
+          onUpdateSkill={onUpdateSkill ? () => onUpdateSkill() : undefined}
+          activeSkillName={activeSkillName}
         />
       </div>
     );
@@ -3162,6 +3530,9 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           onRatioChange={onRatioChange}
           onModelChange={onModelChange}
           onEditMaterial={onEditMaterial}
+          onSaveAsSkill={onSaveAsSkill}
+          onUpdateSkill={onUpdateSkill}
+          activeSkillName={activeSkillName}
         />
       </div>
     );

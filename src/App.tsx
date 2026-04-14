@@ -5,6 +5,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { QueuePanel } from './components/QueuePanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { SkillsPanel } from './components/SkillsPanel';
 import { Sidebar } from './components/Sidebar';
 import { BatchTaskPanel } from './components/BatchTaskPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -179,6 +180,7 @@ export default function App() {
             {activePanel === 'chat' && <ChatPanel />}
             {activePanel === 'queue' && <QueuePanel />}
             {activePanel === 'history' && <HistoryPanel />}
+            {activePanel === 'skills' && <SkillsPanel />}
             {activePanel === 'settings' && <SettingsPanel />}
           </div>
 
