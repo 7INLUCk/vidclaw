@@ -37,6 +37,7 @@ declare global {
       getStatus: () => Promise<{ browserReady: boolean; isLoggedIn: boolean | null; version: string; resultsCount: number; queueStatus: any }>;
       openDownloadDir: () => Promise<{ success: boolean; error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      getFileStat: (filePath: string) => Promise<{ size: number }>;
       onProgress: (callback: (data: any) => void) => () => void;
       onComplete: (callback: (data: any) => void) => () => void;
       onLoginRequired: (callback: () => void) => () => void;

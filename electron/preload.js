@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   // 文件操作
   selectFiles: () => ipcRenderer.invoke('file:select'),
   selectDownloadDir: () => ipcRenderer.invoke('file:select-download-dir'),
+  getFileStat: (filePath) => ipcRenderer.invoke('file:stat', filePath),
 
   // 设置
   getSettings: () => ipcRenderer.invoke('settings:get'),

@@ -746,9 +746,10 @@ function registerIpcHandlers() {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: '选择素材文件',
       filters: [
-        { name: '所有支持格式', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'mov', 'avi', 'webm'] },
-        { name: '仅图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
-        { name: '仅视频', extensions: ['mp4', 'mov', 'avi', 'webm'] },
+        { name: '所有支持格式', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'mp3', 'wav', 'aac', 'm4a'] },
+        { name: '图片 (≤30MB)', extensions: ['jpg', 'jpeg', 'png', 'webp'] },
+        { name: '视频 (≤50MB)', extensions: ['mp4', 'mov'] },
+        { name: '音频 (≤10MB)', extensions: ['mp3', 'wav', 'aac', 'm4a'] },
       ],
       properties: ['openFile', 'multiSelections'],
     });
@@ -766,6 +767,16 @@ function registerIpcHandlers() {
     });
     if (result.canceled) return { dir: '' };
     return { dir: result.filePaths[0] };
+  });
+
+  // ---- 获取文件信息 ----
+  ipcMain.handle('file:stat', async (_event, filePath) => {
+    try {
+      const stat = require('fs').statSync(filePath);
+      return { size: stat.size };
+    } catch {
+      return { size: 0 };
+    }
   });
 
   // ---- 设置管理 ----

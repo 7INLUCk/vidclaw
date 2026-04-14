@@ -5,7 +5,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'clarification';
+  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'login-loading' | 'clarification';
   data?: any;
 }
 
@@ -151,7 +151,7 @@ export interface HistoryItem {
 export interface SavedMaterial {
   id: string;
   path: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
   filename: string;
   storeUri?: string;
   vid?: string;

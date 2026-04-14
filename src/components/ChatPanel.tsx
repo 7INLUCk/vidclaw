@@ -551,6 +551,161 @@ function PillSelect({ label, options, value, onChange, disabled }: {
   );
 }
 
+// ── Video Thumbnail with duration ──
+function VideoThumb({ path, size = 48, onClick }: { path: string; size?: number; onClick?: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const onMeta = () => {
+      setDuration(video.duration);
+      video.currentTime = 0.5;
+    };
+    const onSeeked = () => {
+      try {
+        canvas.width = video.videoWidth || 160;
+        canvas.height = video.videoHeight || 90;
+        canvas.getContext('2d')!.drawImage(video, 0, 0);
+        setThumb(canvas.toDataURL('image/jpeg', 0.75));
+      } catch {}
+    };
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('seeked', onSeeked);
+    return () => {
+      video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('seeked', onSeeked);
+    };
+  }, [path]);
+
+  const fmt = (s: number) => s >= 60 ? `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` : `${Math.floor(s)}s`;
+
+  return (
+    <div className="relative w-full h-full" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+      <video ref={videoRef} src={`local-file://${path}`} style={{ display: 'none' }} preload="metadata" />
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      {thumb ? (
+        <img src={thumb} className="w-full h-full object-cover" alt="" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-surface-1">
+          <Video size={size / 2.4} className="text-text-muted" />
+        </div>
+      )}
+      {duration !== null && (
+        <span className="absolute bottom-1 right-1 text-[9px] bg-black/75 text-white px-1 py-px rounded leading-none font-mono">
+          {fmt(duration)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Attachment Stack (collapsed overlap → expanded strip) ──
+function AttachmentStack({ files, onView, onRemove }: {
+  files: string[];
+  onView: (path: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const THUMB = 44;
+  const OVERLAP = 14;
+  const SHOW = 4;
+
+  if (files.length === 0) return null;
+
+  const renderThumb = (file: string, i: number, stacked = false) => {
+    const isImg = /\.(jpg|jpeg|png|webp)$/i.test(file);
+    const isVid = /\.(mp4|mov)$/i.test(file);
+    const name = file.split('/').pop() || '';
+    return (
+      <div
+        key={`${file}-${i}`}
+        className="relative group flex-shrink-0"
+        style={{ width: THUMB, height: THUMB, ...(stacked ? { marginLeft: i === 0 ? 0 : -OVERLAP, zIndex: SHOW - i } : {}) }}
+      >
+        <div
+          onClick={() => stacked ? setExpanded(true) : onView(file)}
+          className="w-full h-full rounded-lg overflow-hidden border-2 border-[oklch(0.22_0.01_250)] cursor-pointer hover:border-brand/50 transition-colors"
+        >
+          {isImg && (
+            <img
+              src={`local-file://${file}`}
+              className="w-full h-full object-cover"
+              alt=""
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          {isVid && <VideoThumb path={file} size={THUMB} />}
+          {!isImg && !isVid && (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-surface-1 gap-0.5">
+              <span className="text-base">🎵</span>
+              <span className="text-[7px] text-text-muted truncate px-1 w-full text-center">{name.replace(/\.[^.]+$/, '')}</span>
+            </div>
+          )}
+        </div>
+        {!stacked && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(i); }}
+            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-error flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow"
+          >
+            <X size={7} className="text-white" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const extra = Math.max(0, files.length - SHOW);
+
+  if (!expanded) {
+    return (
+      <div
+        className="flex items-center cursor-pointer select-none"
+        style={{ height: THUMB }}
+        onClick={() => setExpanded(true)}
+        title="点击展开查看全部素材"
+      >
+        <div className="flex items-center relative">
+          {files.slice(0, SHOW).map((f, i) => renderThumb(f, i, true))}
+          {extra > 0 && (
+            <div
+              className="flex-shrink-0 flex items-center justify-center rounded-lg bg-surface-2 border-2 border-[oklch(0.22_0.01_250)] text-[10px] font-semibold text-text-secondary"
+              style={{ width: THUMB, height: THUMB, marginLeft: -OVERLAP, zIndex: 0 }}
+            >
+              +{extra}
+            </div>
+          )}
+        </div>
+        <div className="ml-2 flex flex-col justify-center">
+          <span className="text-[10px] text-text-muted leading-tight">{files.length} 个素材</span>
+          <span className="text-[9px] text-text-disabled leading-tight flex items-center gap-0.5">
+            展开 <ChevronDown size={8} />
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto" style={{ maxWidth: 320, paddingBottom: 1 }}>
+        {files.map((f, i) => renderThumb(f, i, false))}
+      </div>
+      <button
+        onClick={() => setExpanded(false)}
+        className="flex-shrink-0 ml-1 px-2 h-6 rounded-full bg-surface-1 border border-border text-[9px] text-text-muted hover:text-text-primary flex items-center gap-0.5 transition-colors"
+        title="收起"
+      >
+        <ChevronDown size={8} className="rotate-180" /> 收起
+      </button>
+    </div>
+  );
+}
+
 // ── Parameter Panel (Card-style layout) ──
 function ParameterPanel({
   model, setModel, duration, setDuration, aspectRatio, setAspectRatio, visible
@@ -988,6 +1143,7 @@ export function ChatPanel() {
   const [inputFocused, setInputFocused] = useState(false);
   const [showRefMenu, setShowRefMenu] = useState(false);
   const [viewFile, setViewFile] = useState<string | null>(null);
+  const [fileErrors, setFileErrors] = useState<string[]>([]);
 
   // ── 素材描述编辑处理 ──
   function handleEditMaterial(index: number, newDesc: string) {
@@ -1741,19 +1897,71 @@ export function ChatPanel() {
 
   async function handleSelectFiles() {
     const { files } = await window.api.selectFiles();
-    if (files?.length) {
-      setSelectedFiles((prev) => [...prev, ...files]);
-      // 重构5：上传素材后自动展开参数面板
+    if (!files?.length) return;
+
+    // Validate format + size
+    const IMG_EXTS = /\.(jpg|jpeg|png|webp)$/i;
+    const VID_EXTS = /\.(mp4|mov)$/i;
+    const AUD_EXTS = /\.(mp3|wav|aac|m4a)$/i;
+    const IMG_MAX = 30 * 1024 * 1024;   // 30 MB
+    const VID_MAX = 50 * 1024 * 1024;   // 50 MB
+    const AUD_MAX = 10 * 1024 * 1024;   // 10 MB
+
+    const errors: string[] = [];
+    const accepted: string[] = [];
+
+    for (const f of files) {
+      const name = f.split('/').pop() || f;
+      const ext = name.match(/\.[^.]+$/)?.[0]?.toLowerCase() || '';
+      const isImg = IMG_EXTS.test(f);
+      const isVid = VID_EXTS.test(f);
+      const isAud = AUD_EXTS.test(f);
+
+      if (!isImg && !isVid && !isAud) {
+        errors.push(`不支持的格式 ${ext}（支持：jpg/png/webp, mp4/mov, mp3/wav/aac/m4a）`);
+        continue;
+      }
+
+      // Check file size via fs — call main process
+      let size = 0;
+      try {
+        const stat = await window.api.getFileStat(f);
+        size = stat?.size || 0;
+      } catch {}
+
+      if (isImg && size > IMG_MAX) {
+        errors.push(`图片 ${name} 超过 30MB 限制（当前 ${(size / 1024 / 1024).toFixed(1)}MB）`);
+        continue;
+      }
+      if (isVid && size > VID_MAX) {
+        errors.push(`视频 ${name} 超过 50MB 限制（当前 ${(size / 1024 / 1024).toFixed(1)}MB）`);
+        continue;
+      }
+      if (isAud && size > AUD_MAX) {
+        errors.push(`音频 ${name} 超过 10MB 限制（当前 ${(size / 1024 / 1024).toFixed(1)}MB）`);
+        continue;
+      }
+
+      accepted.push(f);
+    }
+
+    if (errors.length > 0) {
+      setFileErrors(errors);
+      setTimeout(() => setFileErrors([]), 5000);
+    }
+
+    if (accepted.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...accepted]);
       setShowParams(true);
-      // Save to material library
       const { addMaterial } = useStore.getState();
-      files.forEach((f: string) => {
+      accepted.forEach((f: string) => {
         const filename = f.split('/').pop() || f;
-        const isVideo = /\.(mp4|mov|avi|webm)$/i.test(f);
+        const isVideo = VID_EXTS.test(f);
+        const isAudio = AUD_EXTS.test(f);
         addMaterial({
           id: `mat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           path: f,
-          type: isVideo ? 'video' : 'image',
+          type: isVideo ? 'video' : isAudio ? 'audio' : 'image',
           filename,
           createdAt: Date.now(),
         });
@@ -1953,94 +2161,30 @@ export function ChatPanel() {
               : 'border-[oklch(0.38_0.01_250)] bg-surface-3 hover:border-[oklch(0.44_0.01_250)]'
           }`}>
 
-            {/* Top: reference thumbnails + textarea */}
-            <div className="flex gap-3 p-3 pb-2">
+            {/* Attachment strip — only shown when files are present */}
+            {selectedFiles.length > 0 && (
+              <div className="px-3 pt-2.5 pb-1">
+                <AttachmentStack
+                  files={selectedFiles}
+                  onView={setViewFile}
+                  onRemove={removeFile}
+                />
+              </div>
+            )}
 
-              {/* Reference area: thumbnails grid + add button */}
-              {(() => {
-                const imgCount = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f)).length;
-                const vidCount = selectedFiles.filter(f => /\.(mp4|mov|avi|webm)$/i.test(f)).length;
-                const audCount = selectedFiles.filter(f => /\.(mp3|wav|aac|m4a)$/i.test(f)).length;
-                // 官方限制: image≤9, video≤3, audio≤3
-                const canAdd = canInput && (imgCount < 9 || vidCount < 3 || audCount < 3);
-
-                return (
-                  <div className="flex-shrink-0 relative" style={{ maxWidth: '136px' }}>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedFiles.map((file, i) => {
-                        const isImg = /\.(jpg|jpeg|png|webp|gif)$/i.test(file);
-                        const isVid = /\.(mp4|mov|avi|webm)$/i.test(file);
-                        return (
-                          <div key={i} className="relative group w-[60px] h-[60px]">
-                            <button
-                              onClick={() => setViewFile(file)}
-                              className="w-full h-full rounded-lg overflow-hidden bg-surface-1 border border-border-subtle hover:border-border transition-colors flex items-center justify-center"
-                            >
-                              {isImg ? (
-                                <img
-                                  src={`local-file://${file}`}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    const t = e.target as HTMLImageElement;
-                                    t.style.display = 'none';
-                                    t.parentElement!.innerHTML = '<span style="font-size:20px">🖼</span>';
-                                  }}
-                                />
-                              ) : isVid ? (
-                                <span className="text-xl">🎬</span>
-                              ) : (
-                                <span className="text-xl">🎵</span>
-                              )}
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-error/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                            >
-                              <X size={8} />
-                            </button>
-                          </div>
-                        );
-                      })}
-
-                      {/* Add more button */}
-                      {canAdd && (
-                        <div className="relative">
-                          <button
-                            onClick={() => setShowRefMenu(v => !v)}
-                            className="w-[60px] h-[60px] rounded-lg border border-dashed border-border hover:border-brand/50 bg-surface-1 flex flex-col items-center justify-center gap-1 transition-all group"
-                          >
-                            <Plus size={15} className="text-text-muted group-hover:text-text-primary transition-colors" />
-                            {selectedFiles.length === 0 && (
-                              <span className="text-[9px] text-text-muted group-hover:text-text-primary transition-colors leading-tight text-center">参考内容</span>
-                            )}
-                          </button>
-
-                          {showRefMenu && (
-                            <div className="absolute left-0 top-full mt-1.5 bg-surface-3 border border-border rounded-lg shadow-lg z-20 py-1 min-w-[130px]">
-                              <button
-                                onClick={() => { handleSelectFiles(); setShowRefMenu(false); }}
-                                className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
-                              >
-                                <Upload size={11} />
-                                上传文件
-                              </button>
-                              <button
-                                onClick={() => { setShowMaterialLib(true); setShowRefMenu(false); }}
-                                className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
-                              >
-                                <FolderOpen size={11} />
-                                从素材库选择
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+            {/* File validation errors */}
+            {fileErrors.length > 0 && (
+              <div className="px-3 pt-1">
+                {fileErrors.map((err, i) => (
+                  <div key={i} className="text-[10px] text-error flex items-center gap-1 leading-tight mb-0.5">
+                    <AlertTriangle size={9} /> {err}
                   </div>
-                );
-              })()}
+                ))}
+              </div>
+            )}
 
-              {/* Textarea */}
+            {/* Textarea */}
+            <div className="px-3 pt-2 pb-1">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -2050,14 +2194,51 @@ export function ChatPanel() {
                 onBlur={() => { setInputFocused(false); setShowRefMenu(false); }}
                 placeholder={canInput ? '描述你想生成的视频...' : '请先完成当前步骤...'}
                 rows={3}
-                className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder-text-secondary py-0.5 leading-relaxed"
+                className="w-full bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder-text-secondary leading-relaxed"
                 style={{ minHeight: '68px', maxHeight: '160px' }}
                 disabled={!canInput}
               />
             </div>
 
             {/* Bottom toolbar */}
-            <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border-subtle">
+            <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
+              {/* Add files button */}
+              {(() => {
+                const imgCount = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f)).length;
+                const vidCount = selectedFiles.filter(f => /\.(mp4|mov)$/i.test(f)).length;
+                const audCount = selectedFiles.filter(f => /\.(mp3|wav|aac|m4a)$/i.test(f)).length;
+                const canAdd = canInput && imgCount < 9 && vidCount < 3 && audCount < 3;
+                return (
+                  <div className="relative">
+                    <button
+                      onClick={() => canAdd && setShowRefMenu(v => !v)}
+                      disabled={!canAdd}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle hover:border-border bg-surface-1 hover:bg-surface-2 text-[11px] text-text-secondary hover:text-text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      title={selectedFiles.length === 0 ? '添加参考素材' : '继续添加'}
+                    >
+                      <Plus size={11} />
+                      {selectedFiles.length === 0 ? '参考素材' : '继续添加'}
+                    </button>
+                    {showRefMenu && (
+                      <div className="absolute left-0 bottom-full mb-1.5 bg-[oklch(0.20_0.01_250)] border border-border rounded-lg shadow-xl z-30 py-1 min-w-[140px]">
+                        <button
+                          onClick={() => { handleSelectFiles(); setShowRefMenu(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
+                        >
+                          <Upload size={11} /> 从本地上传
+                        </button>
+                        <button
+                          onClick={() => { setShowMaterialLib(true); setShowRefMenu(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2"
+                        >
+                          <FolderOpen size={11} /> 从素材库选择
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <PillSelect
                 label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
                 options={[
@@ -2068,10 +2249,6 @@ export function ChatPanel() {
                 onChange={setSelectedModel}
                 disabled={!canInput}
               />
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle bg-surface-1 text-[11px] text-text-secondary select-none">
-                <Layers size={10} />
-                全能参考
-              </div>
               <PillSelect
                 label={selectedRatio}
                 options={['9:16','16:9','1:1','4:3','3:4','21:9'].map(r => ({ value: r, label: r }))}
