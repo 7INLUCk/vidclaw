@@ -723,8 +723,8 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
               </button>
             )}
 
-            {/* "+" on FRONT card (collapsed) — bottom-right corner, always visible */}
-            {!hovered && isFront && canAdd && (
+            {/* "+" always pinned to bottom-right of front/rightmost card */}
+            {isFront && canAdd && (
               <button
                 onClick={e => { e.stopPropagation(); onAdd(); }}
                 className="absolute -bottom-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-40 shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
@@ -736,24 +736,6 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
           </div>
         );
       })}
-
-      {/* "+" below LAST (rightmost) card when expanded */}
-      {hovered && canAdd && (
-        <button
-          onClick={onAdd}
-          className="absolute flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
-          style={{
-            width: 28, height: 28,
-            left: frontIdx * (W + GAP) + W / 2 - 14, // centered below last card
-            top: 12 + H + 4,
-            background: 'rgba(255,255,255,0.90)',
-            zIndex: 30,
-            transition: 'left 0.26s cubic-bezier(0.34,1.4,0.64,1)',
-          }}
-        >
-          <Plus size={13} style={{ color: 'oklch(0.18 0.01 250)' }} />
-        </button>
-      )}
     </div>
   );
 }
