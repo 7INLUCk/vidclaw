@@ -38,190 +38,315 @@ function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
 }
 
 // ── Batch Confirm Card (批量任务确认表单) ──
+// 单个任务提示词卡片（始终可编辑）
+function BatchTaskPromptCard({
+  index,
+  task,
+  onPromptChange,
+  onDelete,
+}: {
+  index: number;
+  task: BatchTaskItem;
+  onPromptChange: (prompt: string) => void;
+  onDelete: () => void;
+}) {
+  const [showReason, setShowReason] = useState(false);
+
+  return (
+    <div className="bg-surface-3 rounded-md border border-border-subtle overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[10px] font-mono text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">
+            #{index + 1}
+          </span>
+          {task.expectedEffect && (
+            <span className="text-[11px] text-text-secondary truncate">{task.expectedEffect}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {task.reason && (
+            <button
+              onClick={() => setShowReason(v => !v)}
+              className="text-[10px] text-text-muted hover:text-accent transition-colors"
+              title="查看 AI 说明"
+            >
+              💡
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-error hover:bg-error/10 transition-all"
+            title="删除此条"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* AI reason (collapsible) */}
+      {showReason && task.reason && (
+        <div className="px-3 py-2 bg-accent/5 border-b border-border-subtle">
+          <p className="text-[10px] text-text-muted leading-relaxed">{task.reason}</p>
+        </div>
+      )}
+
+      {/* Prompt textarea — always editable */}
+      <textarea
+        value={task.prompt}
+        onChange={e => onPromptChange(e.target.value)}
+        placeholder="输入这条任务的提示词..."
+        className="w-full bg-transparent px-3 py-2.5 text-xs text-text-primary leading-relaxed resize-none outline-none placeholder-text-disabled"
+        rows={3}
+      />
+    </div>
+  );
+}
+
 function BatchConfirmCard({
-  tasks,
   batchName,
   description,
+  materials,
   onConfirm,
   onEdit,
-  onTaskEdit,
-  onTaskDelete,
-  onBack,
 }: {
-  tasks: BatchTaskItem[];
   batchName: string;
   description: string;
+  materials: MaterialItem[];
   onConfirm: () => void;
   onEdit: () => void;
-  onTaskEdit: (index: number) => void;
-  onTaskDelete: (index: number) => void;
-  onBack: () => void;
 }) {
-  const editingTaskIndex = useStore((s) => s.editingTaskIndex);
-  const setEditingTaskIndex = useStore((s) => s.setEditingTaskIndex);
   const batchTasks = useStore((s) => s.batchTasks);
   const setBatchTasks = useStore((s) => s.setBatchTasks);
+  const setPreviewUrl = useStore(s => s.setPreviewUrl);
+  const [previewImg, setPreviewImg] = useState<string | null>(null);
 
-  // 当前正在编辑的任务
-  const editingTask = editingTaskIndex !== null ? batchTasks[editingTaskIndex] : null;
+  const MODEL_OPTIONS = [
+    { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '速度快' },
+    { value: 'seedance2.0',     label: 'Seedance 2.0',      desc: '质量高' },
+  ];
+  const DURATION_OPTIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  const RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
+
+  // Shared params — derived from first task
+  const sharedModel = batchTasks[0]?.model || 'seedance2.0fast';
+  const sharedDuration = batchTasks[0]?.duration || 5;
+  const sharedRatio = batchTasks[0]?.aspectRatio || '9:16';
+  const currentModelLabel = MODEL_OPTIONS.find(m => m.value === sharedModel)?.label || 'Seedance 2.0 Fast';
+
+  const [showParamEditor, setShowParamEditor] = useState(false);
+
+  const updateSharedParam = (key: 'model' | 'duration' | 'aspectRatio', value: any) => {
+    setBatchTasks(batchTasks.map(t => ({ ...t, [key]: value })));
+  };
+
+  const updatePrompt = (index: number, prompt: string) => {
+    const updated = [...batchTasks];
+    updated[index] = { ...updated[index], prompt };
+    setBatchTasks(updated);
+  };
+
+  const deleteTask = (index: number) => {
+    setBatchTasks(batchTasks.filter((_, i) => i !== index));
+  };
+
+  const addTask = () => {
+    const newTask: BatchTaskItem = {
+      id: `task_${Date.now()}_add`,
+      index: batchTasks.length,
+      prompt: '',
+      reason: '',
+      materials: batchTasks[0]?.materials || [],
+      expectedEffect: '',
+      duration: sharedDuration,
+      aspectRatio: sharedRatio,
+      model: sharedModel,
+      status: 'pending',
+    };
+    setBatchTasks([...batchTasks, newTask]);
+  };
+
+  const hasEmptyPrompts = batchTasks.some(t => !t.prompt.trim());
 
   return (
     <div className="bg-surface-2 border border-border rounded-md overflow-hidden max-w-[90%] animate-fade-in-up">
       {/* Top accent band */}
       <div className="h-px bg-brand flex-shrink-0" />
-      <div className="p-4 max-h-[400px] overflow-y-auto">
-          <p className="text-xs text-accent font-medium mb-2 flex items-center gap-1.5">
+      <div className="p-4 max-h-[600px] overflow-y-auto space-y-4">
+
+        {/* Header */}
+        <div>
+          <p className="text-xs text-accent font-medium mb-1.5 flex items-center gap-1.5">
             <span>📦</span> 批量任务确认
           </p>
-          <p className="text-sm text-text-primary font-medium mb-1">{batchName}</p>
-          {description && <p className="text-xs text-text-secondary mb-3">{description}</p>}
+          <p className="text-sm text-text-primary font-medium">{batchName}</p>
+          {description && <p className="text-xs text-text-secondary mt-0.5">{description}</p>}
+        </div>
 
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">
-            共 {tasks.length} 个任务
-          </p>
+        {/* Shared section */}
+        <div className="bg-surface-3 rounded-md p-3 space-y-3">
+          <p className="text-[10px] text-text-muted uppercase tracking-wider">所有任务共用</p>
 
-          {/* 编辑表单 */}
-          {editingTaskIndex !== null && editingTask && (
-            <div className="bg-surface-3 rounded-lg p-3 mb-3 border border-brand">
-              <p className="text-xs font-medium text-brand mb-2">
-                ✏️ 编辑任务 #{editingTaskIndex + 1}
-              </p>
-              <div className="space-y-2">
-                <div>
-                  <label className="text-[10px] text-text-muted mb-1 block">描述</label>
-                  <textarea
-                    value={editingTask.prompt}
-                    onChange={(e) => {
-                      const updatedTasks = [...batchTasks];
-                      updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], prompt: e.target.value };
-                      setBatchTasks(updatedTasks);
-                    }}
-                    className="w-full bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary resize-none"
-                    rows={2}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <div>
-                    <label className="text-[10px] text-text-muted mb-1 block">时长</label>
-                    <select
-                      value={editingTask.duration}
-                      onChange={(e) => {
-                        const updatedTasks = [...batchTasks];
-                        updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], duration: parseInt(e.target.value) };
-                        setBatchTasks(updatedTasks);
-                      }}
-                      className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary"
-                    >
-                      {[4, 5, 6, 8, 10, 12, 15].map((d) => (
-                        <option key={d} value={d}>{d}s</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-text-muted mb-1 block">比例</label>
-                    <select
-                      value={editingTask.aspectRatio}
-                      onChange={(e) => {
-                        const updatedTasks = [...batchTasks];
-                        updatedTasks[editingTaskIndex] = { ...updatedTasks[editingTaskIndex], aspectRatio: e.target.value };
-                        setBatchTasks(updatedTasks);
-                      }}
-                      className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-xs text-text-primary"
-                    >
-                      {['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'].map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => setEditingTaskIndex(null)}
-                    className="px-3 py-1.5 text-xs bg-brand text-white rounded-md"
-                  >
-                    ✓ 保存
-                  </button>
-                  <button
-                    onClick={() => setEditingTaskIndex(null)}
-                    className="px-3 py-1.5 text-xs text-text-secondary bg-surface-2 rounded-md"
-                  >
-                    取消
-                  </button>
-                </div>
+          {/* Materials thumbnails */}
+          {materials.length > 0 && (
+            <div>
+              <p className="text-[10px] text-text-muted mb-1.5">参考素材</p>
+              <div className="flex flex-wrap gap-2">
+                {materials.map((m, i) => {
+                  const isImg = m.type === 'image';
+                  const isVid = m.type === 'video';
+                  const isAud = m.type === 'audio';
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1">
+                      {isImg && (
+                        <button onClick={() => setPreviewImg(m.path)}
+                          className="w-14 h-14 rounded-lg overflow-hidden border border-border hover:border-brand transition-all bg-surface-2" title={m.name}>
+                          <img src={localFileUrlSync(m.path)} alt={m.name} className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3'; }} />
+                        </button>
+                      )}
+                      {isVid && (
+                        <button onClick={() => setPreviewUrl(localFileUrlSync(m.path))}
+                          className="w-14 h-14 rounded-lg overflow-hidden border border-border hover:border-brand transition-all relative" title={m.name}>
+                          <VideoThumb path={m.path} size={40} />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-5 h-5 rounded-full bg-black/50 flex items-center justify-center">
+                              <Play size={9} className="text-white ml-0.5" />
+                            </div>
+                          </div>
+                        </button>
+                      )}
+                      {isAud && (
+                        <div className="w-14 h-14 rounded-lg border border-border bg-surface-2 flex flex-col items-center justify-center gap-1">
+                          <span className="text-purple-400 text-lg">♪</span>
+                        </div>
+                      )}
+                      <span className="text-[9px] text-text-muted max-w-[56px] truncate text-center">{m.name}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* 任务列表 */}
-          <div className="space-y-2 mb-4">
-            {batchTasks.map((task, i) => (
-              <div key={task.id} className={`bg-surface-3 rounded-md p-3 ${editingTaskIndex === i ? 'ring-1 ring-brand' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-text-primary mb-1">
-                      #{i + 1} {task.expectedEffect || '视频生成'}
-                    </p>
-                    <p className="text-[11px] text-text-secondary line-clamp-2">{task.prompt}</p>
-                    {task.reason && (
-                      <p className="text-[10px] text-text-muted mt-1">💡 {task.reason}</p>
-                    )}
-                  </div>
-                  {/* 编辑/删除按钮 */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => setEditingTaskIndex(i)}
-                      className="text-[10px] text-brand hover:underline"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      onClick={() => onTaskDelete(i)}
-                      className="text-[10px] text-error hover:underline"
-                    >
-                      删除
-                    </button>
+          {/* Shared params summary + expand */}
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-1 flex-wrap">
+                {[currentModelLabel, sharedRatio, `${sharedDuration}s`].map(tag => (
+                  <span key={tag} className="px-2 py-0.5 bg-surface-2 rounded text-[10px] text-text-secondary font-mono">{tag}</span>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowParamEditor(v => !v)}
+                className="text-[11px] text-brand hover:text-brand/80 transition-colors shrink-0"
+              >
+                {showParamEditor ? '收起' : '修改参数'}
+              </button>
+            </div>
+
+            {showParamEditor && (
+              <div className="mt-3 space-y-3">
+                {/* 模型 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">模型</p>
+                  <div className="flex gap-2">
+                    {MODEL_OPTIONS.map(m => (
+                      <button key={m.value} onClick={() => updateSharedParam('model', m.value)}
+                        className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 text-left ${sharedModel === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        <span className="font-medium block">{m.label}</span>
+                        <span className="text-[10px] opacity-70">{m.desc}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2 text-[10px] text-text-muted">
-                  <span>{task.duration}s</span>
-                  <span>·</span>
-                  <span>{task.aspectRatio}</span>
-                  {task.materials?.length > 0 && (
-                    <>
-                      <span>·</span>
-                      <span>{task.materials.length} 素材</span>
-                    </>
-                  )}
+                {/* 时长 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">时长</p>
+                  <div className="grid grid-cols-6 gap-1">
+                    {DURATION_OPTIONS.map(d => (
+                      <button key={d} onClick={() => updateSharedParam('duration', d)}
+                        className={`px-2 py-1 text-[11px] rounded-md transition-all ${sharedDuration === d ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        {d}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 比例 */}
+                <div>
+                  <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">比例</p>
+                  <div className="flex flex-wrap gap-1">
+                    {RATIO_OPTIONS.map(r => (
+                      <button key={r} onClick={() => updateSharedParam('aspectRatio', r)}
+                        className={`px-2 py-1 text-[11px] rounded-md transition-all ${sharedRatio === r ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Task list */}
+        <div>
+          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">
+            共 {batchTasks.length} 个任务 · 提示词可直接编辑
+          </p>
+          <div className="space-y-2">
+            {batchTasks.map((task, i) => (
+              <BatchTaskPromptCard
+                key={task.id}
+                index={i}
+                task={task}
+                onPromptChange={prompt => updatePrompt(i, prompt)}
+                onDelete={() => deleteTask(i)}
+              />
             ))}
           </div>
 
-          {/* 操作按钮 */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onConfirm}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 text-white text-xs font-medium rounded-md transition-all hover:-translate-y-0.5"
-            >
-              <CheckCircle size={14} />
-              确认全部提交
-            </button>
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all"
-            >
-              <ChevronDown size={14} className="rotate-180" />
-              返回调整
-            </button>
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all"
-            >
-              <RefreshCw size={14} />
-              重新描述
-            </button>
-          </div>
+          {/* Add task button */}
+          <button
+            onClick={addTask}
+            className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-border hover:border-brand text-text-muted hover:text-brand text-xs rounded-md transition-all"
+          >
+            <Plus size={12} /> 添加一条
+          </button>
         </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={onConfirm}
+            disabled={batchTasks.length === 0 || hasEmptyPrompts}
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-md transition-all hover:-translate-y-0.5 disabled:hover:translate-y-0"
+          >
+            <CheckCircle size={14} />
+            确认全部提交
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all"
+          >
+            <RefreshCw size={14} />
+            重新描述
+          </button>
+          {hasEmptyPrompts && (
+            <span className="text-[10px] text-warning ml-1">请填写所有提示词后提交</span>
+          )}
+        </div>
+      </div>
+
+      {/* Image lightbox */}
+      {previewImg && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setPreviewImg(null)}>
+          <img src={localFileUrlSync(previewImg)} alt="preview" className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
+          <button className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center" onClick={() => setPreviewImg(null)}>
+            <X size={16} className="text-white" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1337,7 +1462,7 @@ export function ChatPanel() {
     guidedStep, setGuidedStep,
     taskMode, setTaskMode,
     sendMode, setSendMode,
-    addTask,
+    addTask, setBatchTasks,
   } = useStore();
   const addHistory = useStore(s => s.addHistory);
   const updateUsage = useStore(s => s.updateUsage);
@@ -1731,6 +1856,21 @@ export function ChatPanel() {
         setGuidedStep('logged-in-ready');
         setTaskMode('single');
       } else {
+        // Populate batchTasks store so the confirm card can read/edit live state
+        const mappedTasks: BatchTaskItem[] = result.tasks.map((t: any, i: number) => ({
+          id: `task_${Date.now()}_${i}`,
+          index: i,
+          prompt: t.prompt || '',
+          reason: t.reason || '',
+          materials: flatBatchMaterials.map(m => ({ path: (m as any).path, type: m.type as 'image' | 'video' | 'audio' })),
+          expectedEffect: t.expectedEffect || '',
+          duration: t.duration || selectedDuration,
+          aspectRatio: t.aspectRatio || selectedRatio,
+          model: t.model || selectedModel,
+          status: 'pending' as const,
+        }));
+        setBatchTasks(mappedTasks);
+
         setGuidedStep('task-confirming');
         addMessage({
           id: (Date.now() + 1).toString(),
@@ -1741,7 +1881,7 @@ export function ChatPanel() {
           data: {
             batchName: result.batchName || '批量任务',
             description: result.description || '',
-            tasks: result.tasks,
+            materials: flatBatchMaterials,
           },
         });
       }
@@ -2000,12 +2140,14 @@ export function ChatPanel() {
   }
 
   async function handleConfirmBatch(batchData: any) {
-    if (!batchData?.tasks?.length) return;
+    // Read from live store (user may have edited/added/deleted tasks)
+    const liveTasks = useStore.getState().batchTasks;
+    if (!liveTasks.length) return;
 
     addMessage({
       id: Date.now().toString() + '_batch_confirm',
       role: 'user',
-      content: `确认批量提交 (${batchData.tasks.length} 个任务)`,
+      content: `确认批量提交 (${liveTasks.length} 个任务)`,
       timestamp: new Date(),
     });
 
@@ -2018,23 +2160,23 @@ export function ChatPanel() {
         id: 'batch_' + Date.now(),
         name: batchData.batchName || '批量任务',
         description: batchData.description || '',
-        totalTasks: batchData.tasks.length,
+        totalTasks: liveTasks.length,
         completedTasks: 0,
         status: 'pending' as const,
         createdAt: new Date().toISOString(),
         downloadDir: '',
       };
 
-      const tasks = batchData.tasks.map((t: any, i: number) => ({
-        id: `task_${Date.now()}_${i}`,
+      const tasks = liveTasks.map((t, i) => ({
+        id: t.id,
         index: i,
-        prompt: t.prompt || '',
-        reason: t.reason || '',
-        materials: t.materials || [],
-        expectedEffect: t.expectedEffect || '',
-        duration: t.duration || 5,
-        aspectRatio: t.aspectRatio || '9:16',
-        model: t.model || 'seedance2.0fast',
+        prompt: t.prompt,
+        reason: t.reason,
+        materials: t.materials,
+        expectedEffect: t.expectedEffect,
+        duration: t.duration,
+        aspectRatio: t.aspectRatio,
+        model: t.model,
         status: 'pending' as const,
       }));
 
@@ -2052,7 +2194,7 @@ export function ChatPanel() {
       addMessage({
         id: Date.now().toString() + '_batch_started',
         role: 'assistant',
-        content: `🚀 批量任务已启动!共 ${batchData.tasks.length} 个任务,正在逐个提交...\n\n结果会自动展示。`,
+        content: `🚀 批量任务已启动！共 ${liveTasks.length} 个任务，正在逐个提交...\n\n结果会自动展示。`,
         timestamp: new Date(),
       });
     } catch (err) {
@@ -2905,29 +3047,16 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   }
 
   // Batch confirm card
-  if (msg.type === 'batch-confirm' && (msg.data as any)?.tasks) {
+  if (msg.type === 'batch-confirm') {
     const data = msg.data as any;
     return (
       <div className="flex justify-start">
         <BatchConfirmCard
-          tasks={data.tasks}
-          batchName={data.batchName || '批量任务'}
-          description={data.description || ''}
+          batchName={data?.batchName || '批量任务'}
+          description={data?.description || ''}
+          materials={data?.materials || []}
           onConfirm={onConfirm || (() => {})}
           onEdit={onEdit || (() => {})}
-          onTaskEdit={(index) => {
-            console.log('Edit task', index);
-          }}
-          onTaskDelete={(index) => {
-            console.log('Delete task', index);
-          }}
-          onBack={() => {
-            // 返回到上一步，清除确认卡片，回到输入状态
-            setGuidedStep?.('logged-in-ready');
-            // 删除当前的批量确认消息
-            setMessages?.(prev => prev.filter(m => m.id !== msg.id));
-            setTaskMode?.(null);
-          }}
         />
       </div>
     );
