@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, FolderOpen, Play, XCircle, Plus } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type BatchTaskItem } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { PromptTemplates } from './PromptTemplates';
@@ -604,7 +604,7 @@ function VideoThumb({ path, size = 48, onClick }: { path: string; size?: number;
   );
 }
 
-// ── Attachment Stack: card-fan collapse/expand on hover ──
+// ── Attachment Stack: card-fan, always visible on left of input ──
 function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
   files: string[];
   onView: (path: string) => void;
@@ -614,17 +614,40 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
 }) {
   const [hovered, setHovered] = useState(false);
 
-  const W = 64;   // card width
-  const H = 80;   // card height
-  const SHIFT = 10;  // per-card horizontal shift in stack
-  const GAP = 8;     // gap between cards when expanded
-  // Slight rotations for each card in the stack (indexed by position)
-  const ROTS = [-5, 2.5, -3, 4, -2];
+  const W = 64;
+  const H = 80;
+  const SHIFT = 10;   // horizontal offset per card in collapsed stack
+  const GAP = 8;      // gap between cards when expanded
+  const ROTS = [-5, 2.5, -3.5, 4.5, -2]; // rotation per position
 
-  if (files.length === 0) return null;
+  // ── Empty state: placeholder card ──
+  if (files.length === 0) {
+    return (
+      <button
+        onClick={canAdd ? onAdd : undefined}
+        disabled={!canAdd}
+        className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl transition-all group disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{
+          width: W, height: H,
+          border: '2px dashed oklch(0.30 0.01 250)',
+        }}
+        onMouseOver={e => canAdd && ((e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.65 0.18 250)')}
+        onMouseOut={e => ((e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.30 0.01 250)')}
+      >
+        <Plus size={18} className="text-text-muted group-hover:text-brand transition-colors" />
+        <span className="text-[9px] text-text-muted group-hover:text-brand transition-colors leading-tight text-center">参考素材</span>
+      </button>
+    );
+  }
 
-  // Collapsed container width: front card + peeking edges + circle "+"
-  const collapsedW = W + Math.min(files.length - 1, 4) * SHIFT + 36;
+  // Container width — collapsed: card stack width; expanded: all cards + gaps
+  // Use overflow:visible so expanded cards can overflow the container
+  const collapsedW = W + Math.min(files.length - 1, 4) * SHIFT;
+  // Front card index (highest z, drawn last) = files.length - 1
+  const frontIdx = files.length - 1;
+  // "+" position in collapsed: bottom-right of front card
+  // front card left = frontIdx * SHIFT
+  const plusCollapsedLeft = frontIdx * SHIFT + W - 12; // -12 to overlap card edge
 
   return (
     <div
@@ -638,112 +661,98 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
         const isVid = /\.(mp4|mov)$/i.test(file);
         const isAud = /\.(mp3|wav|aac|m4a)$/i.test(file);
         const name = (file.split('/').pop() || '').replace(/\.[^.]+$/, '');
+        const isFront = i === frontIdx;
 
-        // Stack: last file is front (highest z, rightmost)
         const stackLeft = i * SHIFT;
         const expandLeft = i * (W + GAP);
         const rot = hovered ? 0 : ROTS[i % ROTS.length];
-        const zIdx = hovered ? files.length - i : i + 1;
+        // Collapsed: last card on top. Expanded: first card on top (left).
+        const zIdx = hovered ? (files.length - i) : (i + 1);
 
         return (
           <div
             key={`${file}-${i}`}
             className="absolute group/card"
             style={{
-              top: 16, // space above for tooltip
+              top: 12,
               left: hovered ? expandLeft : stackLeft,
-              width: W,
-              height: H,
+              width: W, height: H,
               zIndex: zIdx,
               transform: `rotate(${rot}deg)`,
               transformOrigin: 'bottom center',
               transition: 'left 0.26s cubic-bezier(0.34,1.4,0.64,1), transform 0.26s cubic-bezier(0.34,1.4,0.64,1)',
             }}
           >
-            {/* Filename tooltip */}
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 pointer-events-none z-50"
-                 style={{ opacity: hovered ? undefined : 0, transition: 'opacity 0.15s' }}>
-              <div className="opacity-0 group-hover/card:opacity-100 transition-opacity duration-150">
-                <span className="block text-[10px] bg-[oklch(0.14_0.01_250)] text-white px-2 py-0.5 rounded-md shadow-lg whitespace-nowrap max-w-[90px] truncate border border-[oklch(0.28_0.01_250)]">
+            {/* Filename tooltip (only in expanded, on individual hover) */}
+            {hovered && (
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 pointer-events-none z-50 opacity-0 group-hover/card:opacity-100 transition-opacity duration-150">
+                <span className="block text-[10px] bg-[oklch(0.13_0.01_250)] text-white px-2 py-0.5 rounded-md shadow-lg whitespace-nowrap max-w-[90px] truncate border border-[oklch(0.26_0.01_250)]">
                   {name}
                 </span>
               </div>
-            </div>
+            )}
 
             {/* Card face */}
             <div
               className="w-full h-full rounded-xl overflow-hidden shadow-[0_4px_14px_rgba(0,0,0,0.5)] cursor-pointer"
-              onClick={() => hovered && onView(file)}
+              onClick={() => hovered ? onView(file) : setHovered(true)}
             >
               {isImg && (
                 <img src={`local-file://${file}`} className="w-full h-full object-cover" alt=""
-                     onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               )}
               {isVid && <VideoThumb path={file} size={W} />}
               {isAud && (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-1.5"
-                     style={{ background: 'oklch(0.38 0.10 270 / 0.6)', border: '1px solid oklch(0.5 0.12 270 / 0.4)' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center"
-                       style={{ background: 'oklch(0.50 0.12 270 / 0.35)' }}>
-                    <span className="text-lg">🎵</span>
+                     style={{ background: 'oklch(0.38 0.10 270 / 0.6)', border: '1px solid oklch(0.5 0.12 270 / 0.35)' }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'oklch(0.50 0.12 270 / 0.35)' }}>
+                    <span className="text-base">🎵</span>
                   </div>
-                  <span className="text-[9px] text-white/80 font-medium px-1.5 text-center leading-tight w-full truncate">{name}</span>
+                  <span className="text-[9px] text-white/80 px-1.5 text-center leading-tight w-full truncate">{name}</span>
                 </div>
               )}
             </div>
 
-            {/* × delete button */}
-            <div style={{ opacity: hovered ? undefined : 0, pointerEvents: hovered ? undefined : 'none' }}>
+            {/* × delete — visible when expanded + hovering this card */}
+            {hovered && (
               <button
-                onClick={(e) => { e.stopPropagation(); onRemove(i); }}
-                className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-[oklch(0.14_0.01_250)] border border-[oklch(0.30_0.01_250)] text-white flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity shadow-md z-30"
+                onClick={e => { e.stopPropagation(); onRemove(i); }}
+                className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-[oklch(0.13_0.01_250)] border border-[oklch(0.28_0.01_250)] text-white flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity shadow-md z-30"
               >
                 <X size={9} />
               </button>
-            </div>
+            )}
+
+            {/* "+" on FRONT card (collapsed) — bottom-right corner, always visible */}
+            {!hovered && isFront && canAdd && (
+              <button
+                onClick={e => { e.stopPropagation(); onAdd(); }}
+                className="absolute -bottom-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-40 shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
+                style={{ background: 'rgba(255,255,255,0.93)' }}
+              >
+                <Plus size={14} style={{ color: 'oklch(0.18 0.01 250)' }} />
+              </button>
+            )}
           </div>
         );
       })}
 
-      {/* "+" button — circle when collapsed, card when expanded */}
-      {canAdd && (
-        <div
+      {/* "+" below LAST (rightmost) card when expanded */}
+      {hovered && canAdd && (
+        <button
+          onClick={onAdd}
+          className="absolute flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
           style={{
-            position: 'absolute',
-            top: hovered ? 16 : undefined,
-            bottom: hovered ? undefined : 0,
-            left: hovered
-              ? files.length * (W + GAP)
-              : Math.min(files.length - 1, 4) * SHIFT + W * 0.55,
+            width: 28, height: 28,
+            left: frontIdx * (W + GAP) + W / 2 - 14, // centered below last card
+            top: 12 + H + 4,
+            background: 'rgba(255,255,255,0.90)',
+            zIndex: 30,
             transition: 'left 0.26s cubic-bezier(0.34,1.4,0.64,1)',
-            zIndex: 20,
           }}
         >
-          {hovered ? (
-            <button
-              onClick={onAdd}
-              className="flex flex-col items-center justify-center rounded-xl transition-colors"
-              style={{
-                width: W, height: H,
-                border: '2px dashed oklch(0.32 0.01 250)',
-                color: 'oklch(0.55 0.01 250)',
-              }}
-              onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.65 0.18 250)'; (e.currentTarget as HTMLButtonElement).style.color = 'oklch(0.65 0.18 250)'; }}
-              onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.32 0.01 250)'; (e.currentTarget as HTMLButtonElement).style.color = 'oklch(0.55 0.01 250)'; }}
-            >
-              <Plus size={18} />
-              <span className="text-[9px] mt-1.5 leading-tight text-center">参考内容</span>
-            </button>
-          ) : (
-            <button
-              onClick={onAdd}
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
-              style={{ background: 'rgba(255,255,255,0.92)' }}
-            >
-              <Plus size={16} style={{ color: 'oklch(0.18 0.01 250)' }} />
-            </button>
-          )}
-        </div>
+          <Plus size={13} style={{ color: 'oklch(0.18 0.01 250)' }} />
+        </button>
       )}
     </div>
   );
@@ -1184,7 +1193,6 @@ export function ChatPanel() {
   const [showMaterialLib, setShowMaterialLib] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
-  const [showRefMenu, setShowRefMenu] = useState(false);
   const [viewFile, setViewFile] = useState<string | null>(null);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
 
@@ -2208,35 +2216,19 @@ export function ChatPanel() {
               : 'border-[oklch(0.38_0.01_250)] bg-surface-3 hover:border-[oklch(0.44_0.01_250)]'
           }`}>
 
-            {/* Main row: attachment stack (left) + textarea (right) */}
+            {/* Main row: attachment stack (left, always) + textarea (right) */}
             <div className="flex gap-0 p-3 pb-2" style={{ overflow: 'visible' }}>
 
-              {/* Attachment stack — LEFT side, only when files present */}
-              {selectedFiles.length > 0 && (
-                <div className="flex-shrink-0 mr-3 self-center" style={{ overflow: 'visible' }}>
-                  <AttachmentStack
-                    files={selectedFiles}
-                    onView={setViewFile}
-                    onRemove={removeFile}
-                    onAdd={() => setShowRefMenu(v => !v)}
-                    canAdd={canAddFiles}
-                  />
-                  {/* Dropdown menu for add */}
-                  {showRefMenu && (
-                    <div className="absolute mt-1 bg-[oklch(0.20_0.01_250)] border border-border rounded-lg shadow-xl z-50 py-1 min-w-[140px]"
-                         style={{ top: 'auto', left: 'auto' }}>
-                      <button onClick={() => { handleSelectFiles(); setShowRefMenu(false); }}
-                        className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2">
-                        <Upload size={11} /> 从本地上传
-                      </button>
-                      <button onClick={() => { setShowMaterialLib(true); setShowRefMenu(false); }}
-                        className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2">
-                        <FolderOpen size={11} /> 从素材库选择
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Attachment stack — always on LEFT */}
+              <div className="flex-shrink-0 mr-3 self-center" style={{ overflow: 'visible' }}>
+                <AttachmentStack
+                  files={selectedFiles}
+                  onView={setViewFile}
+                  onRemove={removeFile}
+                  onAdd={handleSelectFiles}
+                  canAdd={canAddFiles}
+                />
+              </div>
 
               {/* Textarea */}
               <textarea
@@ -2245,7 +2237,7 @@ export function ChatPanel() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={canInput ? handleKeyDown : undefined}
                 onFocus={() => setInputFocused(true)}
-                onBlur={() => { setInputFocused(false); setShowRefMenu(false); }}
+                onBlur={() => setInputFocused(false)}
                 placeholder={canInput ? '描述你想生成的视频...' : '请先完成当前步骤...'}
                 rows={3}
                 className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder-text-secondary leading-relaxed"
@@ -2267,30 +2259,6 @@ export function ChatPanel() {
 
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
-              {/* Add files button (only when no files yet, or always for quick add) */}
-              <div className="relative">
-                <button
-                  onClick={() => canAddFiles && setShowRefMenu(v => !v)}
-                  disabled={!canAddFiles}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle hover:border-border bg-surface-1 hover:bg-surface-2 text-[11px] text-text-secondary hover:text-text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <Plus size={11} />
-                  {selectedFiles.length === 0 ? '参考素材' : '继续添加'}
-                </button>
-                {showRefMenu && (
-                  <div className="absolute left-0 bottom-full mb-1.5 bg-[oklch(0.20_0.01_250)] border border-border rounded-lg shadow-xl z-30 py-1 min-w-[140px]">
-                    <button onClick={() => { handleSelectFiles(); setShowRefMenu(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2">
-                      <Upload size={11} /> 从本地上传
-                    </button>
-                    <button onClick={() => { setShowMaterialLib(true); setShowRefMenu(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center gap-2">
-                      <FolderOpen size={11} /> 从素材库选择
-                    </button>
-                  </div>
-                )}
-              </div>
-
               <PillSelect
                 label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
                 options={[
