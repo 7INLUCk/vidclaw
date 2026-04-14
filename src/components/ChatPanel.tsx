@@ -556,8 +556,8 @@ function PillSelect({ label, icon, options, value, onChange, disabled }: {
 // ── Static info pill (no dropdown) ──
 function PillTag({ label, icon }: { label: string; icon?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle bg-surface-1 text-[11px] text-text-disabled select-none">
-      {icon && <span className="opacity-50">{icon}</span>}
+    <div className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-border-subtle bg-surface-1 text-[11px] text-text-secondary select-none">
+      {icon && <span className="opacity-60">{icon}</span>}
       {label}
     </div>
   );
@@ -2307,13 +2307,6 @@ export function ChatPanel() {
 
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-[oklch(0.22_0.01_250)]">
-              {/* Static info pills */}
-              <PillTag label="视频生成" icon={<Video size={10} />} />
-              <PillTag label="全能参考" icon={<Layers size={10} />} />
-
-              <div className="w-px h-3.5 bg-border-subtle mx-0.5 shrink-0" />
-
-              {/* Interactive param pills */}
               <PillSelect
                 icon={<Zap size={10} />}
                 label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
@@ -2325,6 +2318,8 @@ export function ChatPanel() {
                 onChange={setSelectedModel}
                 disabled={!canInput}
               />
+              <PillTag label="视频生成" icon={<Video size={10} />} />
+              <PillTag label="全能参考" icon={<Layers size={10} />} />
               <PillSelect
                 icon={<RectangleHorizontal size={10} />}
                 label={selectedRatio}
