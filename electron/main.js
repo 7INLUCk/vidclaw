@@ -681,6 +681,36 @@ function registerIpcHandlers() {
     };
   });
 
+  // ---- automation:run-structured alias (renderer calls runStructuredTask → this channel) ----
+  ipcMain.handle('automation:run-structured', async (_event, params) => {
+    const prompt = params.prompt || '';
+    const duration = params.duration || 5;
+    const ratio = params.aspectRatio || params.ratio || '9:16';
+    const model = params.model || 'seedance2.0fast';
+    const materials = params.materials || [];
+
+    console.log('[run-structured] prompt:', prompt.slice(0, 80), '素材:', materials.length);
+    sendToRenderer('task:progress', { event: 'progress', data: { progressType: 'submitting', message: '正在提交任务...' } });
+
+    const args = ['multimodal2video', '--prompt=' + prompt, '--duration=' + duration, '--ratio=' + ratio, '--model_version=' + model];
+    const images = materials.filter(m => m.type === 'image').slice(0, 9);
+    const videos = materials.filter(m => m.type === 'video').slice(0, 3);
+    const audios = materials.filter(m => m.type === 'audio').slice(0, 3);
+    images.forEach(m => args.push('--image=' + m.path));
+    videos.forEach(m => args.push('--video=' + m.path));
+    audios.forEach(m => args.push('--audio=' + m.path));
+
+    const result = await callDreamina(args, 60000);
+    if (!result.success) return { success: false, error: result.error };
+
+    const data = parseCliJson(result.stdout);
+    if (!data || !data.submit_id) return { success: false, error: 'CLI 未返回 submit_id' };
+
+    const submitId = data.submit_id;
+    startPolling(submitId, { prompt, downloadDir: settings.downloadDir, materials });
+    return { success: true, submitId, prompt, message: '任务已提交' };
+  });
+
   // ---- 历史列表查询 ----
   ipcMain.handle('task:list', async (_event, { limit, status } = {}) => {
     const args = ['list_task'];
@@ -865,6 +895,26 @@ function registerIpcHandlers() {
     try {
       const manager = ensureBatchTaskManager();
       return { success: true, ...manager.getStatus() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('batch:delete-task', async (_event, { taskId }) => {
+    try {
+      const manager = ensureBatchTaskManager();
+      manager.deleteTask(taskId);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('batch:update-task', async (_event, { taskId, updates }) => {
+    try {
+      const manager = ensureBatchTaskManager();
+      manager.updateTask(taskId, updates);
+      return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
     }

@@ -1158,11 +1158,12 @@ export function ChatPanel() {
     sendMode, setSendMode,
     addTask,
   } = useStore();
+  const addHistory = useStore(s => s.addHistory);
+  const updateUsage = useStore(s => s.updateUsage);
 
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [pendingTask, setPendingTask] = useState<any>(null);
-  const [loginPollTimer, setLoginPollTimer] = useState<ReturnType<typeof setInterval> | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [lastPrompt, setLastPrompt] = useState('');
   const [lastFiles, setLastFiles] = useState<string[]>([]);
@@ -1250,12 +1251,6 @@ export function ChatPanel() {
     }
   }, []);
 
-  // Cleanup polling
-  useEffect(() => {
-    return () => {
-      if (loginPollTimer) clearInterval(loginPollTimer);
-    };
-  }, [loginPollTimer]);
 
 
   // ── Guide flow handlers ──
@@ -1353,30 +1348,6 @@ export function ChatPanel() {
     }
   }
 
-  function startLoginPolling() {
-    if (loginPollTimer) clearInterval(loginPollTimer);
-
-    const timer = setInterval(async () => {
-      try {
-        const { loggedIn } = await window.api.checkLogin();
-        if (loggedIn) {
-          clearInterval(timer);
-          setLoginPollTimer(null);
-          useStore.getState().setIsLoggedIn(true);
-
-          setGuidedStep('logged-in-ready');
-          addMessage({
-            id: Date.now().toString() + '_login_ok',
-            role: 'assistant',
-            content: '✅ 登录成功！左下角可以切换三种模式：\n✨ 智能生成 — 描述想法，AI 帮你优化成提示词\n📋 批量规划 — 描述目标，AI 自动拆解成多个任务\n⚡ 专业模式 — 自己写好提示词，直接发送\n\n默认是智能生成，描述你想生成的视频效果就行。',
-            timestamp: new Date(),
-          });
-        }
-      } catch { /* silent */ }
-    }, 3000);
-
-    setLoginPollTimer(timer);
-  }
 
   async function handleSend() {
     if (!input.trim() || isSubmitting) return;
@@ -2014,7 +1985,25 @@ export function ChatPanel() {
             progress: 100,
             completedAt: Date.now(),
           });
+          // 写入历史面板
+          useStore.getState().addHistory({
+            id: 'hist_' + Date.now(),
+            prompt: found.prompt,
+            model: found.model,
+            duration: found.duration,
+            resultUrl: data.data.filePath || '',
+            localPath: data.data.filePath || '',
+            createdAt: Date.now(),
+            status: 'downloaded',
+          });
         }
+        // 更新用量统计
+        const u = useStore.getState().usage;
+        useStore.getState().updateUsage({
+          totalTasks: u.totalTasks + 1,
+          completedTasks: u.completedTasks + 1,
+          todayTasks: u.todayTasks + 1,
+        });
         addMessage({
           id: Date.now().toString() + '_dl',
           role: 'system',
@@ -2030,6 +2019,12 @@ export function ChatPanel() {
             error: data.data?.error || '生成失败',
           });
         }
+        // 更新用量统计（失败也计入总数）
+        const u = useStore.getState().usage;
+        useStore.getState().updateUsage({
+          totalTasks: u.totalTasks + 1,
+          failedTasks: u.failedTasks + 1,
+        });
       } else if (data.event === 'queue-task-submitted') {
         addMessage({
           id: Date.now().toString() + '_qs',

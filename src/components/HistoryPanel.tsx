@@ -39,9 +39,8 @@ function HistoryCard({ item, onPreview }: { item: HistoryItem; onPreview: (url: 
   }, [item.prompt]);
 
   const handleDownload = useCallback(() => {
-    if (item.resultUrl) {
-      window.api.downloadTask({ url: item.resultUrl, prompt: item.prompt });
-    }
+    const path = item.localPath || item.resultUrl;
+    if (path) window.api.openFile(path);
   }, [item]);
 
   return (

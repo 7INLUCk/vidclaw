@@ -456,6 +456,32 @@ class BatchTaskManager {
   }
 
   /**
+   * 删除任务（仅 pending/failed 状态可删）
+   */
+  deleteTask(taskId) {
+    const idx = this.tasks.findIndex(t => t.id === taskId);
+    if (idx === -1) return;
+    const task = this.tasks[idx];
+    // 停止该任务的轮询（如果有）
+    if (task.submitId && this.pollingTimers.has(task.submitId)) {
+      clearInterval(this.pollingTimers.get(task.submitId));
+      this.pollingTimers.delete(task.submitId);
+    }
+    this.tasks.splice(idx, 1);
+    this._persistTasks();
+  }
+
+  /**
+   * 更新任务字段
+   */
+  updateTask(taskId, updates) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    Object.assign(task, updates);
+    this._persistTasks();
+  }
+
+  /**
    * 设置批次完成回调
    */
   setOnCompleteCallback(callback) {
