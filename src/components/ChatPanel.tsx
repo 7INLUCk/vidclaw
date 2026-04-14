@@ -652,9 +652,13 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
     );
   }
 
-  // Container width — collapsed: card stack width; expanded: all cards + gaps
-  // Use overflow:visible so expanded cards can overflow the container
+  // Container width:
+  //   collapsed — stack width (cards overlap)
+  //   expanded  — full spread width so gaps between cards stay inside the hit-area,
+  //               preventing the mouse-leaves-gap → collapse → flicker loop
   const collapsedW = W + Math.min(files.length - 1, 4) * SHIFT;
+  const expandedW  = files.length * (W + GAP) - GAP;
+  const containerW = hovered ? expandedW : collapsedW;
   // Front card index (highest z, drawn last) = files.length - 1
   const frontIdx = files.length - 1;
   // "+" position in collapsed: bottom-right of front card
@@ -664,7 +668,7 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
   return (
     <div
       className="relative flex-shrink-0"
-      style={{ width: collapsedW, height: H + 20, overflow: 'visible' }}
+      style={{ width: containerW, height: H + 20, overflow: 'visible', transition: 'width 0.22s cubic-bezier(0.34,1.4,0.64,1)' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
