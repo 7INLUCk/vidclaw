@@ -2275,29 +2275,6 @@ export function ChatPanel() {
               {statusText || getStepDescription(guidedStep)}
             </p>
           </div>
-          {/* 模式切换按钮 - 已登录后显示 */}
-          {['logged-in-ready', 'batch-collecting', 'batch-confirming', 'task-drafting', 'task-confirming'].includes(guidedStep) && (
-            <div className="flex items-center gap-1.5 ml-4 px-2.5 py-1 bg-surface-2 rounded-lg border border-border-subtle">
-              <span className="text-xs text-text-secondary">
-                {taskMode === 'batch' ? '📦 批量模式' : '📄 单个模式'}
-              </span>
-              <button
-                onClick={() => {
-                  setGuidedStep('logged-in-ready');
-                  addMessage({
-                    id: Date.now().toString() + '_mode_switch',
-                    role: 'assistant',
-                    content: '',
-                    timestamp: new Date(),
-                    type: 'mode-select',
-                  });
-                }}
-                className="text-[10px] text-brand hover:text-brand-light hover:underline transition-colors"
-              >
-                切换
-              </button>
-            </div>
-          )}
         </div>
         {/* 进度可视化 */}
         <div className="text-xs text-text-secondary">
