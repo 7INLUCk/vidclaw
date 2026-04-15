@@ -92,6 +92,12 @@ contextBridge.exposeInMainWorld('api', {
   updateBatchTask: (taskId, updates) => ipcRenderer.invoke('batch:update-task', { taskId, updates }),
   deleteBatchTask: (taskId) => ipcRenderer.invoke('batch:delete-task', { taskId }),
 
+  // ── 内测邮箱登录 ──
+  emailLogin: (email) => ipcRenderer.invoke('auth:email-login', email),
+
+  // ── 可灵 O1 图生视频（Coze API）──
+  klingGenerate: (params) => ipcRenderer.invoke('kling:generate', params),
+
   // 通知
   sendTaskNotify: (task) => ipcRenderer.invoke('task:notify', task),
   onNotificationClick: (callback) => {

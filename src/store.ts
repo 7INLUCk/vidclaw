@@ -5,7 +5,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'login-loading' | 'clarification';
+  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'login-loading' | 'clarification' | 'kling-confirm';
   data?: any;
 }
 
@@ -170,7 +170,27 @@ export interface SavedMaterial {
   createdAt: number;
 }
 
-// ===== Prompt 模板 =====
+// ===== 鉴权 =====
+export interface AuthUser {
+  email: string;
+  isInternal: boolean;
+  loginAt: number;
+}
+
+// ===== 积分 =====
+export interface CreditTransaction {
+  id: string;
+  type: 'grant' | 'add' | 'deduct';
+  amount: number;
+  description: string;
+  balanceAfter: number;
+  createdAt: number;
+}
+
+export interface CreditsState {
+  balance: number;
+  transactions: CreditTransaction[];
+}
 
 // ===== 用量统计 =====
 export interface UsageStats {
@@ -219,7 +239,7 @@ interface AppState {
   settingsLoaded: boolean;
 
   // UI 状态
-  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'skills';
+  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription';
 
   // 发送模式 & 批量任务状态
   sendMode: SendMode;
@@ -240,6 +260,13 @@ interface AppState {
   activeSkill: Skill | null;
   // 用量统计
   usage: UsageStats;
+  // 鉴权 & 积分
+  auth: AuthUser | null;
+  credits: CreditsState;
+  setAuth: (auth: AuthUser | null) => void;
+  deductCredits: (amount: number, description: string) => boolean;
+  addCredits: (amount: number, description: string) => void;
+
   // 视频预览
   previewUrl: string | null;
   setPreviewUrl: (url: string | null) => void;
@@ -259,7 +286,7 @@ interface AppState {
   setSubmitting: (submitting: boolean) => void;
   setStatusText: (text: string) => void;
   setSettings: (settings: Partial<Settings>) => void;
-  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'skills') => void;
+  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription') => void;
   // 发送模式 & 批量任务 Actions
   setSendMode: (mode: SendMode) => void;
   setTaskMode: (mode: TaskMode) => void;
@@ -346,6 +373,19 @@ export const useStore = create<AppState>((set) => ({
     } catch { return []; }
   })(),
   activeSkill: null,
+  // 鉴权 & 积分
+  auth: (() => {
+    try {
+      const saved = localStorage.getItem('vidclaw_auth');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  })(),
+  credits: (() => {
+    try {
+      const saved = localStorage.getItem('vidclaw_credits');
+      return saved ? JSON.parse(saved) : { balance: 0, transactions: [] };
+    } catch { return { balance: 0, transactions: [] }; }
+  })(),
   // 用量统计
   usage: (() => {
     try {
@@ -421,6 +461,43 @@ export const useStore = create<AppState>((set) => ({
     return { skills };
   }),
   setActiveSkill: (activeSkill) => set({ activeSkill }),
+  // 鉴权 Actions
+  setAuth: (auth) => set(() => {
+    try { localStorage.setItem('vidclaw_auth', auth ? JSON.stringify(auth) : ''); } catch {}
+    return { auth };
+  }),
+  deductCredits: (amount, description) => {
+    const state = useStore.getState();
+    if (state.credits.balance < amount) return false;
+    const balanceAfter = state.credits.balance - amount;
+    const tx: CreditTransaction = {
+      id: 'tx_' + Date.now(),
+      type: 'deduct',
+      amount,
+      description,
+      balanceAfter,
+      createdAt: Date.now(),
+    };
+    const credits = { balance: balanceAfter, transactions: [tx, ...state.credits.transactions].slice(0, 100) };
+    try { localStorage.setItem('vidclaw_credits', JSON.stringify(credits)); } catch {}
+    set({ credits });
+    return true;
+  },
+  addCredits: (amount, description) => {
+    const state = useStore.getState();
+    const balanceAfter = state.credits.balance + amount;
+    const tx: CreditTransaction = {
+      id: 'tx_' + Date.now(),
+      type: amount >= 1000 ? 'grant' : 'add',
+      amount,
+      description,
+      balanceAfter,
+      createdAt: Date.now(),
+    };
+    const credits = { balance: balanceAfter, transactions: [tx, ...state.credits.transactions].slice(0, 100) };
+    try { localStorage.setItem('vidclaw_credits', JSON.stringify(credits)); } catch {}
+    set({ credits });
+  },
   // 用量 Actions
   updateUsage: (updates) => set((s) => {
     const usage = { ...s.usage, ...updates };

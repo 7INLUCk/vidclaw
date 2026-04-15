@@ -6,11 +6,13 @@ import { QueuePanel } from './components/QueuePanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SkillsPanel } from './components/SkillsPanel';
+import { SubscriptionPanel } from './components/SubscriptionPanel';
+import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { BatchTaskPanel } from './components/BatchTaskPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { VideoModal } from './components/VideoModal';
-import { Maximize2, Minimize2, PawPrint } from 'lucide-react';
+import { Maximize2, Minimize2, PawPrint, Zap } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -67,6 +69,15 @@ declare global {
       checkCredits: () => Promise<{ success: boolean; isLoggedIn?: boolean; credits?: number; error?: string }>;
       authLogin: () => Promise<{ success: boolean; qrPath?: string; message?: string; error?: string }>;
       authLogout: () => Promise<{ success: boolean; error?: string }>;
+      // ── Internal email auth ──
+      emailLogin: (email: string) => Promise<{ success: boolean; isInternal?: boolean; error?: string }>;
+      // ── Kling O1 via Coze ──
+      klingGenerate: (params: {
+        imagePaths: string[];
+        prompt: string;
+        duration: number;
+        aspectRatio: string;
+      }) => Promise<{ success: boolean; videoUrl?: string; localPath?: string; submitId?: string; error?: string }>;
     };
   }
 }
@@ -77,6 +88,7 @@ export default function App() {
     setAppState,
     setSettings, activePanel, setActivePanel,
     taskMode, batchTasks, previewUrl, setPreviewUrl,
+    auth, credits,
   } = useStore();
 
   const [showBatchPanel, setShowBatchPanel] = useState(true);
@@ -171,6 +183,25 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="flex h-screen bg-[var(--color-background)] text-white">
+        {/* Auth gate — shown when not logged in */}
+        {!auth && <AuthModal />}
+
+        {/* Low credits banner */}
+        {auth && credits.balance < 50 && credits.balance >= 0 && activePanel !== 'subscription' && (
+          <div className="fixed top-0 left-14 right-0 z-50 flex items-center justify-between px-4 py-1.5 text-xs"
+            style={{ background: 'oklch(0.45 0.2 25 / 0.95)', backdropFilter: 'blur(4px)' }}>
+            <div className="flex items-center gap-2">
+              <Zap size={11} className="text-white/80" />
+              <span className="text-white/90">积分余额不足 50，可灵 O1 功能受限</span>
+            </div>
+            <button
+              onClick={() => setActivePanel('subscription')}
+              className="text-white underline underline-offset-2 hover:text-white/80 transition-colors"
+            >
+              充值
+            </button>
+          </div>
+        )}
         {/* Left sidebar */}
         <Sidebar />
 
@@ -182,6 +213,7 @@ export default function App() {
             {activePanel === 'history' && <HistoryPanel />}
             {activePanel === 'skills' && <SkillsPanel />}
             {activePanel === 'settings' && <SettingsPanel />}
+            {activePanel === 'subscription' && <SubscriptionPanel />}
           </div>
 
           {/* Batch task panel (right) */}

@@ -1,8 +1,8 @@
-import { MessageSquare, Layers, Settings, Clock, PawPrint, Zap } from 'lucide-react';
+import { MessageSquare, Layers, Settings, Clock, PawPrint, Zap, Wallet } from 'lucide-react';
 import { useStore } from '../store';
 
 export function Sidebar() {
-  const { activePanel, setActivePanel, tasks, isSubmitting, skills } = useStore();
+  const { activePanel, setActivePanel, tasks, isSubmitting, skills, auth, credits } = useStore();
 
   const activeTaskCount = tasks.filter(t =>
     ['generating', 'queued', 'pending', 'uploading'].includes(t.status)
@@ -88,14 +88,47 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="mt-auto flex flex-col items-center gap-0.5 w-full px-1.5 pb-2">
+      <div className="mt-auto flex flex-col items-center gap-1 w-full px-1.5 pb-2">
+        {/* Credits button (only when logged in) */}
+        {auth && (
+          <button
+            onClick={() => setActivePanel('subscription')}
+            className={`relative w-full h-10 flex flex-col items-center justify-center gap-0.5 transition-all duration-150 group ${
+              activePanel === 'subscription' ? 'nav-active-indicator' : ''
+            }`}
+            style={{
+              borderRadius: 'var(--radius-md)',
+              color: activePanel === 'subscription'
+                ? 'var(--color-brand)'
+                : credits.balance < 50
+                  ? 'var(--color-error, #ef4444)'
+                  : 'var(--color-text-muted)',
+              background: activePanel === 'subscription' ? 'oklch(0.62 0.22 282 / 0.10)' : 'transparent',
+            }}
+            title={`积分余额: ${credits.balance.toLocaleString()}`}
+          >
+            <Wallet size={14} strokeWidth={activePanel === 'subscription' ? 2.2 : 1.8} />
+            <span style={{ fontSize: '9px', fontWeight: activePanel === 'subscription' ? 600 : 400, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              {credits.balance >= 10000 ? '99k+' : credits.balance.toLocaleString()}
+            </span>
+            {/* Low balance dot */}
+            {credits.balance < 50 && credits.balance >= 0 && (
+              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-error" />
+            )}
+            {/* Hover background */}
+            {activePanel !== 'subscription' && (
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity -z-10"
+                style={{ borderRadius: 'var(--radius-md)', background: 'var(--color-surface-3)' }}
+              />
+            )}
+          </button>
+        )}
+
         {/* Version indicator */}
         <span
           className="font-mono"
-          style={{
-            fontSize: '9px',
-            color: 'var(--color-text-secondary)'
-          }}
+          style={{ fontSize: '9px', color: 'var(--color-text-secondary)' }}
         >
           v0.1
         </span>

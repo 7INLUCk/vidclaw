@@ -1511,7 +1511,7 @@ export function ChatPanel() {
   } = useStore();
   const addHistory = useStore(s => s.addHistory);
   const updateUsage = useStore(s => s.updateUsage);
-  const { addSkill, updateSkill, activeSkill, setActiveSkill } = useStore();
+  const { addSkill, updateSkill, activeSkill, setActiveSkill, credits, deductCredits, addCredits } = useStore();
 
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -1712,6 +1712,12 @@ export function ChatPanel() {
     // Skill mode: bypass AI, go directly to confirm card
     if (activeSkill) {
       handleSkillSend();
+      return;
+    }
+
+    // Kling O1 mode: image-to-video via Coze API
+    if (selectedModel === 'kling-o1') {
+      handleKlingSend();
       return;
     }
 
@@ -2448,6 +2454,127 @@ export function ChatPanel() {
     setActiveSkill(null);
   }
 
+  // ── 可灵 O1 图生视频 ──
+  function handleKlingSend() {
+    const imageFiles = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    if (imageFiles.length === 0) {
+      addMessage({
+        id: Date.now().toString() + '_kling_noimgs',
+        role: 'assistant',
+        content: '⚠️ 可灵 O1 是图生视频模型，请先上传至少一张图片（支持 jpg/png/webp）',
+        timestamp: new Date(),
+        type: 'error',
+      });
+      return;
+    }
+    const cost = selectedDuration * 10;
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim() || '（未输入提示词）',
+      timestamp: new Date(),
+      data: { materials: imageFiles.map((f, i) => ({ type: 'image', name: `图片${i + 1}`, path: f })) },
+    };
+    addMessage(userMsg);
+    addMessage({
+      id: Date.now().toString() + '_kling_confirm',
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      type: 'kling-confirm',
+      data: { prompt: input.trim(), imagePaths: imageFiles, duration: selectedDuration, aspectRatio: selectedRatio, cost },
+    });
+    setInput('');
+  }
+
+  async function handleConfirmKling(data: any) {
+    const { prompt, imagePaths, duration, aspectRatio, cost } = data;
+    const canAfford = credits.balance >= cost;
+    if (!canAfford) {
+      addMessage({
+        id: Date.now().toString() + '_credits_low',
+        role: 'assistant',
+        content: `❌ 积分不足。需要 ${cost} 积分，当前余额 ${credits.balance}`,
+        timestamp: new Date(),
+        type: 'error',
+      });
+      return;
+    }
+    // Deduct credits pre-flight
+    deductCredits(cost, `可灵 O1 · ${duration}s 视频`);
+    addMessage({
+      id: Date.now().toString() + '_kling_submit',
+      role: 'user',
+      content: `确认提交 · ${duration}s · ${aspectRatio} · ${cost} 积分`,
+      timestamp: new Date(),
+    });
+    setSubmitting(true);
+    setGuidedStep('task-executing');
+    setStatusText('⏳ 正在生成可灵 O1 视频...');
+    try {
+      const result = await window.api.klingGenerate({ imagePaths, prompt, duration, aspectRatio });
+      if (result.success) {
+        const submitId = result.submitId || 'kling_' + Date.now();
+        addTask({
+          id: 'task_' + Date.now(),
+          submitId,
+          prompt,
+          type: 'video',
+          status: result.localPath ? 'downloaded' : 'completed',
+          model: 'kling-o1',
+          duration,
+          materials: imagePaths.map((p: string) => ({ path: p, type: 'image' as const })),
+          resultUrl: result.videoUrl,
+          localPath: result.localPath || undefined,
+          filePath: result.localPath || undefined,
+          downloaded: !!result.localPath,
+          createdAt: Date.now(),
+          completedAt: Date.now(),
+          retryCount: 0,
+        });
+        addHistory({
+          id: 'hist_' + Date.now(),
+          prompt,
+          model: 'kling-o1',
+          duration,
+          resultUrl: result.videoUrl || '',
+          localPath: result.localPath || '',
+          createdAt: Date.now(),
+          status: result.localPath ? 'downloaded' : 'completed',
+        });
+        addMessage({
+          id: Date.now().toString() + '_kling_done',
+          role: 'assistant',
+          content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。\n${result.localPath ? `已保存至: ${result.localPath}` : '可在历史面板查看'}`,
+          timestamp: new Date(),
+        });
+      } else {
+        addCredits(cost, '可灵 O1 生成失败退款');
+        addMessage({
+          id: Date.now().toString() + '_kling_fail',
+          role: 'assistant',
+          content: `❌ 生成失败: ${result.error}\n已退还 ${cost} 积分`,
+          timestamp: new Date(),
+          type: 'error',
+        });
+      }
+    } catch (err: any) {
+      addCredits(cost, '可灵 O1 生成失败退款');
+      addMessage({
+        id: Date.now().toString() + '_kling_err',
+        role: 'assistant',
+        content: `❌ 出错了: ${err?.message || err}\n已退还 ${cost} 积分`,
+        timestamp: new Date(),
+        type: 'error',
+      });
+    } finally {
+      setSubmitting(false);
+      setStatusText('');
+      setGuidedStep('logged-in-ready');
+      setSelectedFiles([]);
+    }
+  }
+
   // Listen for progress events
   useEffect(() => {
     console.log('[前端] 注册 onProgress 监听器');
@@ -2912,6 +3039,7 @@ export function ChatPanel() {
                   onSaveAsSkill={msg.type === 'ai-rewrite' || msg.type === 'batch-confirm' ? (prompt?: string) => setSaveSkillContext({ type: msg.type === 'batch-confirm' ? 'batch' : 'single', prompt }) : undefined}
                   onUpdateSkill={activeSkill && (msg.type === 'ai-rewrite' || msg.type === 'batch-confirm') ? (prompt?: string) => handleUpdateSkill(prompt) : undefined}
                   activeSkillName={activeSkill?.name}
+                  onConfirmKling={msg.type === 'kling-confirm' ? handleConfirmKling : undefined}
                 />
               </div>
             ))}
@@ -3011,15 +3139,27 @@ export function ChatPanel() {
               />
               <PillSelect
                 icon={<Zap size={10} />}
-                label={selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
+                label={selectedModel === 'kling-o1' ? '可灵 O1' : selectedModel === 'seedance_2.0_fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
                 options={[
-                  { value: 'seedance_2.0_fast', label: 'Seedance 2.0 Fast' },
-                  { value: 'seedance_2.0', label: 'Seedance 2.0' },
+                  { value: 'seedance_2.0_fast', label: 'Seedance 2.0 Fast', desc: '即梦 · 最快速度' },
+                  { value: 'seedance_2.0', label: 'Seedance 2.0', desc: '即梦 · 标准质量' },
+                  { value: 'kling-o1', label: '可灵 O1 · 图生视频', desc: `图生视频 · ${selectedDuration * 10} 积分/${selectedDuration}s · 需上传图片` },
                 ]}
                 value={selectedModel}
                 onChange={setSelectedModel}
                 disabled={!canInput}
               />
+              {/* Credit cost badge for Kling O1 */}
+              {selectedModel === 'kling-o1' && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] border ${
+                  credits.balance >= selectedDuration * 10
+                    ? 'border-brand/30 text-brand bg-brand/10'
+                    : 'border-error/30 text-error bg-error/10'
+                }`}>
+                  <Zap size={9} />
+                  <span>{selectedDuration * 10}</span>
+                </div>
+              )}
               <PillTag label="全能参考" icon={<Layers size={10} />} />
               <PillSelect
                 icon={<RectangleHorizontal size={10} />}
@@ -3054,7 +3194,7 @@ export function ChatPanel() {
               {/* Send button */}
               <button
                 onClick={handleSend}
-                disabled={(!input.trim() && !activeSkill) || !canInput}
+                disabled={(!input.trim() && !activeSkill && !(selectedModel === 'kling-o1' && selectedFiles.some(f => /\.(jpg|jpeg|png|webp)$/i.test(f)))) || !canInput}
                 className="w-8 h-8 rounded-full bg-brand hover:bg-brand/90 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all active:scale-95"
               >
                 <ArrowUp size={15} />
@@ -3216,7 +3356,75 @@ function getProgressText(step: GuidedStep): string {
   return info.step > 0 ? `步骤 ${info.step}/5 ${info.label}` : '';}
 
 // ── Message Bubble ──
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore, onSaveAsSkill, onUpdateSkill, activeSkillName }: {
+// ── Kling Confirm Card ────────────────────────────────────────────────────────
+function KlingConfirmCard({ data, onConfirm, onCancel }: {
+  data: { prompt: string; imagePaths: string[]; duration: number; aspectRatio: string; cost: number };
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { credits } = useStore();
+  const canAfford = credits.balance >= data.cost;
+
+  return (
+    <div className="bg-surface-2 border border-border-subtle rounded-xl overflow-hidden max-w-[85%] animate-fade-in-up">
+      <div className="h-px bg-brand" />
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-brand flex items-center gap-1.5">
+            <Zap size={11} /> 可灵 O1 · 图生视频
+          </span>
+          <span className="text-[10px] text-text-muted bg-surface-3 px-1.5 py-0.5 rounded-full">
+            {data.duration}s · {data.aspectRatio}
+          </span>
+        </div>
+        {/* Thumbnails */}
+        <div className="flex gap-1.5 flex-wrap">
+          {data.imagePaths.slice(0, 7).map((p, i) => (
+            <div key={i} className="w-12 h-12 rounded-md overflow-hidden bg-surface-3 shrink-0 border border-border-subtle">
+              <img src={localFileUrlSync(p)} className="w-full h-full object-cover" alt="" />
+            </div>
+          ))}
+        </div>
+        {/* Prompt */}
+        {data.prompt && (
+          <p className="text-xs text-text-secondary leading-relaxed bg-surface-3 rounded-lg px-2.5 py-2">
+            {data.prompt}
+          </p>
+        )}
+        {/* Credit cost */}
+        <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+          <div className="flex items-center gap-1.5">
+            <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+            <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+              消耗 {data.cost} 积分
+            </span>
+          </div>
+          <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+            余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+          </span>
+        </div>
+        {/* Actions */}
+        <div className="flex gap-2 pt-0.5">
+          <button
+            onClick={onConfirm}
+            disabled={!canAfford}
+            className="flex-1 py-2 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-all"
+          >
+            确认生成
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs rounded-lg transition-colors"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore, onSaveAsSkill, onUpdateSkill, activeSkillName, onConfirmKling }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -3239,6 +3447,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   onSaveAsSkill?: (prompt?: string) => void;
   onUpdateSkill?: (prompt?: string) => void;
   activeSkillName?: string;
+  onConfirmKling?: (data: any) => void;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -3425,6 +3634,20 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           onSaveAsSkill={onSaveAsSkill ? () => onSaveAsSkill() : undefined}
           onUpdateSkill={onUpdateSkill ? () => onUpdateSkill() : undefined}
           activeSkillName={activeSkillName}
+        />
+      </div>
+    );
+  }
+
+  // Kling O1 confirm card
+  if (msg.type === 'kling-confirm' && msg.data) {
+    const data = msg.data as any;
+    return (
+      <div className="flex justify-start">
+        <KlingConfirmCard
+          data={data}
+          onConfirm={() => onConfirmKling?.(data)}
+          onCancel={() => {}}
         />
       </div>
     );

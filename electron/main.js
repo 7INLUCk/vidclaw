@@ -887,6 +887,76 @@ function registerIpcHandlers() {
 
   ipcMain.handle('file:server-port', () => localFileServerPort);
 
+  // ── 邮箱登录（内测鉴权）──────────────────────────────────────────
+  // 白名单后缀：@miaoboai.com → 内部用户，赠送 99999 积分
+  const INTERNAL_DOMAINS = ['miaoboai.com'];
+  ipcMain.handle('auth:email-login', async (_event, email) => {
+    if (!email || typeof email !== 'string') {
+      return { success: false, error: '请输入邮箱地址' };
+    }
+    const normalized = email.trim().toLowerCase();
+    const domainMatch = normalized.match(/@(.+)$/);
+    if (!domainMatch) return { success: false, error: '邮箱格式不正确' };
+    const domain = domainMatch[1];
+    const isInternal = INTERNAL_DOMAINS.includes(domain);
+    return { success: true, isInternal, email: normalized };
+  });
+
+  // ── 可灵 O1 图生视频（Coze API）──────────────────────────────────
+  const { klingGenerate } = require('./coze');
+  ipcMain.handle('kling:generate', async (_event, { imagePaths, prompt, duration, aspectRatio }) => {
+    console.log('[Kling] 开始生成，图片数:', imagePaths?.length, '时长:', duration, '比例:', aspectRatio);
+
+    const submitId = 'kling_' + Date.now();
+    const downloadDir = path.join(settings.downloadDir || path.join(require('os').homedir(), 'Downloads', '即梦'), '可灵O1');
+
+    // Report initial progress to renderer
+    sendToRenderer('task:progress', {
+      event: 'progress',
+      data: { submitId, progressType: 'submitting', message: '正在上传图片...' },
+    });
+
+    try {
+      const result = await klingGenerate(
+        { imagePaths, prompt, duration, aspectRatio, downloadDir },
+        (msg) => {
+          sendToRenderer('task:progress', {
+            event: 'progress',
+            data: { submitId, progressType: 'generating', message: msg, progress: 50 },
+          });
+        }
+      );
+
+      if (result.success) {
+        sendToRenderer('task:progress', {
+          event: 'result',
+          data: {
+            submitId,
+            status: 'completed',
+            filePath: result.localPath || '',
+            resultUrl: result.videoUrl,
+            downloadDir,
+            prompt,
+          },
+        });
+        return { success: true, videoUrl: result.videoUrl, localPath: result.localPath, submitId };
+      } else {
+        sendToRenderer('task:progress', {
+          event: 'result',
+          data: { submitId, status: 'failed', filePath: '', error: result.error },
+        });
+        return { success: false, error: result.error };
+      }
+    } catch (err) {
+      console.error('[Kling] 生成异常:', err);
+      sendToRenderer('task:progress', {
+        event: 'result',
+        data: { submitId, status: 'failed', filePath: '', error: err.message },
+      });
+      return { success: false, error: err.message };
+    }
+  });
+
   // ---- 选择下载目录 ----
   ipcMain.handle('file:select-download-dir', async () => {
     if (!mainWindow) return { dir: '' };

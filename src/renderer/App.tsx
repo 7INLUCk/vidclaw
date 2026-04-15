@@ -63,6 +63,8 @@ declare global {
       checkCredits: () => Promise<{ success: boolean; isLoggedIn?: boolean; credits?: number; error?: string }>;
       authLogin: () => Promise<{ success: boolean; qrPath?: string; message?: string; error?: string }>;
       authLogout: () => Promise<{ success: boolean; error?: string }>;
+      emailLogin: (email: string) => Promise<{ success: boolean; isInternal?: boolean; error?: string }>;
+      klingGenerate: (params: { imagePaths: string[]; prompt: string; duration: number; aspectRatio: string }) => Promise<{ success: boolean; videoUrl?: string; localPath?: string; submitId?: string; error?: string }>;
     };
   }
 }
