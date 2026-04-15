@@ -335,25 +335,21 @@ function BatchConfirmCard({
 
         {/* 积分余额行 */}
         {isKling ? (
-          <div className={`px-3 py-2 rounded-lg space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-                <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-                  共 {batchTasks.length} 条 · 合计消耗 {klingTotalCost} 积分
-                </span>
-              </div>
-              <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-                VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+            <div className="flex items-center gap-1.5">
+              <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+              <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                共 {batchTasks.length} 条 · 合计消耗 {klingTotalCost} 积分
               </span>
             </div>
-            <div className="flex justify-end">
-              <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
-            </div>
+            <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+              余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+            </span>
           </div>
         ) : (
-          <div className="flex items-center justify-end px-3 py-2 rounded-lg bg-surface-3">
-            <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-3">
+            <span className="text-[10px] text-text-muted">即梦账号余额</span>
+            <span className="text-[10px] text-text-secondary font-medium">{jimengBalance.toLocaleString()} 积分</span>
           </div>
         )}
         {/* Action buttons */}
@@ -1329,25 +1325,21 @@ function ConfirmCard({
 
           {/* 积分余额行 */}
           {isKling ? (
-            <div className={`px-3 py-2 rounded-lg mb-3 space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-                  <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-                    消耗 {klingCost} 积分
-                  </span>
-                </div>
-                <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-                  VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg mb-3 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+              <div className="flex items-center gap-1.5">
+                <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+                <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                  消耗 {klingCost} 积分
                 </span>
               </div>
-              <div className="flex justify-end">
-                <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
-              </div>
+              <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+                余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+              </span>
             </div>
           ) : (
-            <div className="flex items-center justify-end px-3 py-2 rounded-lg mb-3 bg-surface-3">
-              <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg mb-3 bg-surface-3">
+              <span className="text-[10px] text-text-muted">即梦账号余额</span>
+              <span className="text-[10px] text-text-secondary font-medium">{jimengBalance.toLocaleString()} 积分</span>
             </div>
           )}
           <div className="flex items-center gap-2 flex-wrap">
@@ -4118,7 +4110,7 @@ function KlingConfirmCard({ data, onConfirm, onCancel, onSaveAsSkill }: {
   onCancel: () => void;
   onSaveAsSkill?: () => void;
 }) {
-  const { credits, jimengBalance } = useStore();
+  const { credits } = useStore();
   const canAfford = credits.balance >= data.cost;
 
   return (
@@ -4147,22 +4139,17 @@ function KlingConfirmCard({ data, onConfirm, onCancel, onSaveAsSkill }: {
             {data.prompt}
           </p>
         )}
-        {/* Credit cost + dual balance */}
-        <div className={`px-3 py-2 rounded-lg space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-              <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-                消耗 {data.cost} 积分
-              </span>
-            </div>
-            <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-              VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+        {/* Credit cost */}
+        <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+          <div className="flex items-center gap-1.5">
+            <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+            <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+              消耗 {data.cost} 积分
             </span>
           </div>
-          <div className="flex justify-end">
-            <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
-          </div>
+          <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+            余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+          </span>
         </div>
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-0.5">
