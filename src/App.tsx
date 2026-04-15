@@ -160,14 +160,25 @@ export default function App() {
       // Restore in-progress batch tasks from backend
       try {
         const batchStatus = await window.api.getBatchStatus();
+        console.log('[Init] getBatchStatus response:', JSON.stringify({
+          success: batchStatus.success,
+          taskCount: batchStatus.tasks?.length,
+          batchName: batchStatus.batch?.name,
+          running: batchStatus.running,
+        }));
         const restoredTasks = batchStatus.success ? (batchStatus.tasks as import('./store').BatchTaskItem[] | undefined) : undefined;
         if (restoredTasks && restoredTasks.length > 0) {
           const { setBatchTasks, setBatchInfo, taskMode, setTaskMode } = useStore.getState();
           setBatchTasks(restoredTasks);
           if (batchStatus.batch) setBatchInfo(batchStatus.batch);
           if (taskMode !== 'batch') setTaskMode('batch');
+          console.log('[Init] restored', restoredTasks.length, 'batch tasks into store');
+        } else {
+          console.log('[Init] no batch tasks to restore');
         }
-      } catch {}
+      } catch (err) {
+        console.error('[Init] getBatchStatus failed:', err);
+      }
 
       setAppState('ready');
     } catch (err) {
