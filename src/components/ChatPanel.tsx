@@ -2326,6 +2326,7 @@ export function ChatPanel() {
     } finally {
       setSubmitting(false);
       setStatusText('');
+      setGuidedStep('logged-in-ready');
     }
   }
 
