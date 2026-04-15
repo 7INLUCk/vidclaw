@@ -936,15 +936,10 @@ function registerIpcHandlers() {
 
   // ── 可灵 O1 图生视频（Coze API）──────────────────────────────────
   const { klingGenerate } = require('./coze');
-  ipcMain.handle('kling:generate', async (_event, { imagePaths, prompt, duration, aspectRatio, submitId: clientSubmitId }) => {
-    console.log('[Kling] 开始生成，图片数:', imagePaths?.length, '时长:', duration, '比例:', aspectRatio);
-
-    // Renderer generates submitId so it can register the task before progress events arrive
+  ipcMain.handle('kling:generate', (_event, { imagePaths, prompt, duration, aspectRatio, submitId: clientSubmitId }) => {
     const submitId = clientSubmitId || 'kling_' + Date.now();
     const downloadDir = path.join(settings.downloadDir || path.join(require('os').homedir(), 'Downloads', '即梦'), '可灵O1');
 
-    // Stage-to-progress mapping for the renderer's progress bar
-    // Stages: upload(5-25%) → submitted(30%) → generating(30-90%, crawl) → downloading(90%)
     function sendKlingProgress(stage, message, progress) {
       sendToRenderer('task:progress', {
         event: 'kling-progress',
@@ -952,52 +947,51 @@ function registerIpcHandlers() {
       });
     }
 
-    sendKlingProgress('upload', `上传图片 (共 ${imagePaths.length} 张)...`, 5);
-
-    // Track per-image upload progress
-    let uploadedCount = 0;
-    const totalImages = imagePaths.length;
-
-    try {
-      const result = await klingGenerate(
-        { imagePaths, prompt, duration, aspectRatio, downloadDir },
-        (msg) => {
-          if (msg.includes('上传图片') || msg.includes('上传完成')) {
-            uploadedCount++;
-            const pct = 5 + Math.round((uploadedCount / totalImages) * 20); // 5→25%
-            sendKlingProgress('upload', msg, Math.min(pct, 25));
-          } else if (msg.includes('已提交') || msg.includes('等待生成')) {
-            sendKlingProgress('submitted', msg, 30);
-          } else if (msg.includes('下载')) {
-            sendKlingProgress('downloading', msg, 90);
-          } else {
-            // SSE node messages — keep at 30, client-side crawl takes it to 90
-            sendKlingProgress('generating', msg, 30);
+    // Fire-and-forget: start generation in background, return submitId immediately
+    setImmediate(async () => {
+      console.log('[Kling] 开始生成，图片数:', imagePaths?.length, '时长:', duration, '比例:', aspectRatio);
+      sendKlingProgress('upload', `上传图片 (共 ${imagePaths.length} 张)...`, 5);
+      let uploadedCount = 0;
+      const totalImages = imagePaths.length;
+      try {
+        const result = await klingGenerate(
+          { imagePaths, prompt, duration, aspectRatio, downloadDir },
+          (msg) => {
+            if (msg.includes('上传图片') || msg.includes('上传完成')) {
+              uploadedCount++;
+              const pct = 5 + Math.round((uploadedCount / totalImages) * 20);
+              sendKlingProgress('upload', msg, Math.min(pct, 25));
+            } else if (msg.includes('已提交') || msg.includes('等待生成')) {
+              sendKlingProgress('submitted', msg, 30);
+            } else if (msg.includes('下载')) {
+              sendKlingProgress('downloading', msg, 90);
+            } else {
+              sendKlingProgress('generating', msg, 30);
+            }
           }
+        );
+        if (result.success) {
+          sendToRenderer('task:progress', {
+            event: 'result',
+            data: { submitId, status: 'completed', filePath: result.localPath || '', resultUrl: result.videoUrl, downloadDir, prompt },
+          });
+        } else {
+          sendToRenderer('task:progress', {
+            event: 'failed',
+            data: { submitId, error: result.error },
+          });
         }
-      );
-
-      if (result.success) {
+      } catch (err) {
+        console.error('[Kling] 生成异常:', err);
         sendToRenderer('task:progress', {
-          event: 'result',
-          data: { submitId, status: 'completed', filePath: result.localPath || '', resultUrl: result.videoUrl, downloadDir, prompt },
+          event: 'failed',
+          data: { submitId, error: err.message },
         });
-        return { success: true, videoUrl: result.videoUrl, localPath: result.localPath, submitId };
-      } else {
-        sendToRenderer('task:progress', {
-          event: 'result',
-          data: { submitId, status: 'failed', filePath: '', error: result.error },
-        });
-        return { success: false, error: result.error };
       }
-    } catch (err) {
-      console.error('[Kling] 生成异常:', err);
-      sendToRenderer('task:progress', {
-        event: 'result',
-        data: { submitId, status: 'failed', filePath: '', error: err.message },
-      });
-      return { success: false, error: err.message };
-    }
+    });
+
+    // Return immediately so renderer can unlock input right away
+    return { success: true, submitId };
   });
 
   // ---- 选择下载目录 ----

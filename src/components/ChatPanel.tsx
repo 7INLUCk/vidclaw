@@ -1573,6 +1573,7 @@ export function ChatPanel() {
 
   // ── 技能相关状态 ──
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [queueToast, setQueueToast] = useState('');
   const [saveSkillContext, setSaveSkillContext] = useState<{
     type: 'single' | 'batch' | 'kling';
     prompt?: string;
@@ -2414,18 +2415,9 @@ export function ChatPanel() {
         }
         deductCredits(cost, `可灵 O1 技能 · ${skill.duration}s`);
         const submitId = 'kling_' + Date.now();
-        const taskId = 'task_' + Date.now();
-        addTask({ id: taskId, submitId, prompt, type: 'video', status: 'generating', progress: 0, statusMessage: '准备中...', model: 'kling-o1', duration: skill.duration, materials: imagePaths.map(p => ({ path: p, type: 'image' as const })), createdAt: Date.now(), retryCount: 0 });
-        setStatusText('⏳ 正在生成可灵 O1 视频...');
-        const result = await window.api.klingGenerate({ imagePaths, prompt, duration: skill.duration, aspectRatio: skill.aspectRatio, submitId });
-        if (result.success) {
-          useStore.getState().updateTask(taskId, { status: result.localPath ? 'downloaded' : 'completed', resultUrl: result.videoUrl, localPath: result.localPath || undefined, filePath: result.localPath || undefined, downloaded: !!result.localPath, completedAt: Date.now(), progress: 100 });
-          addMessage({ id: Date.now().toString() + '_done', role: 'assistant', content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。`, timestamp: new Date() });
-        } else {
-          addCredits(cost, '可灵 O1 技能失败退款');
-          useStore.getState().updateTask(taskId, { status: 'failed', error: result.error, progress: 0 });
-          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 生成失败: ${result.error}`, timestamp: new Date(), type: 'error' });
-        }
+        addTask({ id: 'task_' + Date.now(), submitId, prompt, type: 'video', status: 'generating', progress: 0, statusMessage: '准备中...', model: 'kling-o1', duration: skill.duration, materials: imagePaths.map(p => ({ path: p, type: 'image' as const })), createdAt: Date.now(), retryCount: 0 });
+        void window.api.klingGenerate({ imagePaths, prompt, duration: skill.duration, aspectRatio: skill.aspectRatio, submitId });
+        showQueueToast('✅ 已加入队列，前往排队区查看进度');
         return;
       }
 
@@ -2631,10 +2623,14 @@ export function ChatPanel() {
     setInput('');
   }
 
-  async function handleConfirmKling(data: any) {
+  function showQueueToast(msg: string) {
+    setQueueToast(msg);
+    setTimeout(() => setQueueToast(''), 3000);
+  }
+
+  function handleConfirmKling(data: any) {
     const { prompt, imagePaths, duration, aspectRatio, cost } = data;
-    const canAfford = credits.balance >= cost;
-    if (!canAfford) {
+    if (credits.balance < cost) {
       addMessage({
         id: Date.now().toString() + '_credits_low',
         role: 'assistant',
@@ -2661,11 +2657,9 @@ export function ChatPanel() {
       },
     });
 
-    // Register task in queue BEFORE the IPC call so progress events can find it by submitId
     const submitId = 'kling_' + Date.now();
-    const taskId = 'task_' + Date.now();
     addTask({
-      id: taskId,
+      id: 'task_' + Date.now(),
       submitId,
       prompt,
       type: 'video',
@@ -2679,65 +2673,13 @@ export function ChatPanel() {
       retryCount: 0,
     });
 
-    setSubmitting(true);
-    setGuidedStep('task-executing');
-    setStatusText('⏳ 正在生成可灵 O1 视频...');
-    try {
-      const result = await window.api.klingGenerate({ imagePaths, prompt, duration, aspectRatio, submitId });
-      if (result.success) {
-        useStore.getState().updateTask(taskId, {
-          status: result.localPath ? 'downloaded' : 'completed',
-          resultUrl: result.videoUrl,
-          localPath: result.localPath || undefined,
-          filePath: result.localPath || undefined,
-          downloaded: !!result.localPath,
-          completedAt: Date.now(),
-          progress: 100,
-          statusMessage: '已完成',
-        });
-        addHistory({
-          id: 'hist_' + Date.now(),
-          prompt,
-          model: 'kling-o1',
-          duration,
-          resultUrl: result.videoUrl || '',
-          localPath: result.localPath || '',
-          createdAt: Date.now(),
-          status: result.localPath ? 'downloaded' : 'completed',
-        });
-        addMessage({
-          id: Date.now().toString() + '_kling_done',
-          role: 'assistant',
-          content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。\n${result.localPath ? `已保存至: ${result.localPath}` : '可在历史面板查看'}`,
-          timestamp: new Date(),
-        });
-      } else {
-        addCredits(cost, '可灵 O1 生成失败退款');
-        useStore.getState().updateTask(taskId, { status: 'failed', error: result.error, progress: 0 });
-        addMessage({
-          id: Date.now().toString() + '_kling_fail',
-          role: 'assistant',
-          content: `❌ 生成失败: ${result.error}\n已退还 ${cost} 积分`,
-          timestamp: new Date(),
-          type: 'error',
-        });
-      }
-    } catch (err: any) {
-      addCredits(cost, '可灵 O1 生成失败退款');
-      useStore.getState().updateTask(taskId, { status: 'failed', error: err?.message || String(err), progress: 0 });
-      addMessage({
-        id: Date.now().toString() + '_kling_err',
-        role: 'assistant',
-        content: `❌ 出错了: ${err?.message || err}\n已退还 ${cost} 积分`,
-        timestamp: new Date(),
-        type: 'error',
-      });
-    } finally {
-      setSubmitting(false);
-      setStatusText('');
-      setGuidedStep('logged-in-ready');
-      setSelectedFiles([]);
-    }
+    // Fire-and-forget: IPC returns immediately, generation runs in background
+    void window.api.klingGenerate({ imagePaths, prompt, duration, aspectRatio, submitId });
+
+    // Unlock input right away
+    setSelectedFiles([]);
+    setInput('');
+    showQueueToast('✅ 已加入队列，前往排队区查看进度');
   }
 
   // Listen for progress events
@@ -2865,17 +2807,34 @@ export function ChatPanel() {
             progress: 100,
             completedAt: Date.now(),
           });
-          // 写入历史面板
           useStore.getState().addHistory({
             id: 'hist_' + Date.now(),
             prompt: found.prompt,
             model: found.model,
             duration: found.duration,
-            resultUrl: data.data.filePath || '',
+            resultUrl: data.data.resultUrl || data.data.filePath || '',
             localPath: data.data.filePath || '',
             createdAt: Date.now(),
             status: 'downloaded',
           });
+          // For Kling tasks show completion message with credit info
+          if (found.model === 'kling-o1') {
+            const cost = (found.duration || 5) * 10;
+            addMessage({
+              id: Date.now().toString() + '_kling_done',
+              role: 'assistant',
+              content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。${data.data.filePath ? `\n已保存至: ${data.data.filePath}` : ''}`,
+              timestamp: new Date(),
+            });
+          } else {
+            addMessage({
+              id: Date.now().toString() + '_dl',
+              role: 'system',
+              content: `✅ 已下载: ${data.data?.filePath?.split('/').pop()}`,
+              timestamp: new Date(),
+              type: 'download',
+            });
+          }
         }
         // 更新用量统计
         const u = useStore.getState().usage;
@@ -2884,13 +2843,6 @@ export function ChatPanel() {
           completedTasks: u.completedTasks + 1,
           todayTasks: u.todayTasks + 1,
         });
-        addMessage({
-          id: Date.now().toString() + '_dl',
-          role: 'system',
-          content: `✅ 已下载: ${data.data?.filePath?.split('/').pop()}`,
-          timestamp: new Date(),
-          type: 'download',
-        });
       } else if (data.event === 'failed') {
         const found = useStore.getState().tasks.find(t => t.submitId === data.data?.submitId);
         if (found) {
@@ -2898,6 +2850,18 @@ export function ChatPanel() {
             status: 'failed',
             error: data.data?.error || '生成失败',
           });
+          // Refund credits for Kling failures
+          if (found.model === 'kling-o1') {
+            const cost = (found.duration || 5) * 10;
+            useStore.getState().addCredits(cost, '可灵 O1 生成失败退款');
+            addMessage({
+              id: Date.now().toString() + '_kling_fail',
+              role: 'assistant',
+              content: `❌ 可灵 O1 生成失败: ${data.data?.error || '未知错误'}\n已退还 ${cost} 积分`,
+              timestamp: new Date(),
+              type: 'error',
+            });
+          }
         }
         // 更新用量统计（失败也计入总数）
         const u = useStore.getState().usage;
@@ -3290,6 +3254,13 @@ export function ChatPanel() {
 
       {/* Parameter Panel */}
       {/* Jimeng-style unified input card */}
+      {/* Queue toast */}
+      {queueToast && (
+        <div className="mx-4 mb-1 px-3 py-2 rounded-lg bg-success/15 border border-success/30 text-xs text-success flex items-center gap-2 animate-fade-in">
+          {queueToast}
+        </div>
+      )}
+
       {showInputArea && (
         <div className="px-4 py-3 flex-shrink-0">
           <div className="rounded-xl border border-border bg-surface-2 transition-all duration-200 input-card-focus shadow-[var(--shadow-card)]">
