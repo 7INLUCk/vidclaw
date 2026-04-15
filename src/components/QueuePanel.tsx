@@ -1,18 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Loader2, Clock, Film, Image as ImageIcon, CheckCircle, XCircle, AlertTriangle, Trash2, RefreshCw, Download, Play } from 'lucide-react';
 import { useStore, type TaskRecord } from '../store';
 
-// 时间估算工具函数
-function estimateRemainingTime(progress: number, startTime: number): string {
-  if (progress <= 0 || progress >= 100) return ''; 
-  const elapsed = (Date.now() - startTime) / 1000; // 秒
-  const rate = progress / elapsed;
-  if (rate <= 0) return '--';
-  const remaining = (100 - progress) / rate;
-  if (remaining < 60) return `${Math.round(remaining)}秒`;
-  if (remaining < 3600) return `${Math.round(remaining / 60)}分钟`;
-  return `${Math.round(remaining / 3600)}小时`;
-}
 
 const statusColor: Record<string, string> = {
   pending: 'text-text-muted',
@@ -130,31 +119,63 @@ function EmptyState({ filter }: { filter: FilterType }) {
 
 function TaskCard({ task }: { task: TaskRecord }) {
   const { retryTask, deleteTask, downloadTask } = useStore();
+  const isKling     = task.model === 'kling-o1';
+  const isQueued    = task.status === 'queued';
   const isGenerating = task.status === 'generating';
   const isCompleted = ['completed', 'downloaded'].includes(task.status);
-  const isFailed = task.status === 'failed';
-  const progress = task.progress ?? 0;
-  const startTime = task.startTime ?? Date.now();
-  const remainingTime = isGenerating && progress > 0 ? estimateRemainingTime(progress, startTime) : '';
+  const isFailed    = task.status === 'failed';
+
+  // ── Countdown (Seedance queued) ──────────────────────────────────────────
+  // Re-render every minute so the minsLeft computation stays accurate.
+  const [, forceMinuteUpdate] = useState(0);
+  useEffect(() => {
+    if (!isQueued) return;
+    const id = setInterval(() => forceMinuteUpdate(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [isQueued]);
+
+  const minsLeft = (isQueued && task.nextPollAt)
+    ? Math.max(0, Math.ceil((task.nextPollAt - Date.now()) / 60_000))
+    : null;
+
+  // ── Crawl progress (Kling generating phase 30→90%) ──────────────────────
+  // Slowly inches forward while the SSE stream runs to give the bar life.
+  const [crawlPct, setCrawlPct] = useState<number>(task.progress ?? 0);
+
+  // Sync when store pushes a real stage jump (upload→submitted→generating)
+  useEffect(() => {
+    setCrawlPct(prev => Math.max(prev, task.progress ?? 0)); // never go backward
+  }, [task.progress]);
+
+  // Start crawl once we hit the generating stage; stop when done
+  useEffect(() => {
+    if (!isKling || !isGenerating) return;
+    const id = setInterval(() => {
+      setCrawlPct(p => (p < 90 ? p + 1 : p));
+    }, 8_000);
+    return () => clearInterval(id);
+  }, [isKling, isGenerating]);
+
+  const displayProgress = isKling ? crawlPct : (task.progress ?? 0);
+  const showProgressBar = (isKling && isGenerating) || (!isKling && isGenerating && displayProgress > 0);
 
   return (
     <div className={`bg-surface-1 border rounded-md p-3 transition-colors ${
       isCompleted ? 'border-success/30' :
-      isFailed ? 'border-error/30' :
+      isFailed    ? 'border-error/30'   :
       'border-border'
     }`}>
       <div className="flex items-start gap-2.5">
         {/* Icon */}
         <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${
           isCompleted ? 'bg-success/10' :
-          isFailed ? 'bg-error/10' :
+          isFailed    ? 'bg-error/10'   :
           'bg-surface-2'
         }`}>
-          {task.type === 'image' ? (
-            <ImageIcon size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
-          ) : (
-            <Film size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
-          )}
+          {task.type === 'image'
+            ? <ImageIcon size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
+            : <Film      size={16} className={isFailed ? 'text-error' : 'text-text-muted'} />
+          }
         </div>
 
         {/* Content */}
@@ -162,36 +183,50 @@ function TaskCard({ task }: { task: TaskRecord }) {
           <p className="text-sm text-text-primary line-clamp-2 leading-tight">{task.prompt}</p>
 
           {/* Status row */}
-          <div className="flex items-center gap-1.5 mt-1.5">
-            {isGenerating && <Loader2 size={12} className="animate-spin text-brand" />}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {(isQueued || isGenerating) && <Loader2 size={12} className="animate-spin text-brand" />}
             {isCompleted && <CheckCircle size={12} className="text-success" />}
-            {isFailed && <AlertTriangle size={12} className="text-error" />}
+            {isFailed    && <AlertTriangle size={12} className="text-error" />}
+
             <span className={`text-xs font-medium ${statusColor[task.status]}`}>
               {statusLabel[task.status]}
             </span>
-            {isGenerating && progress > 0 && (
-              <>
-                <span className="text-xs text-text-muted">{progress}%</span>
-                {remainingTime && (
-                  <span className="text-xs text-text-muted flex items-center gap-0.5">
-                    <Clock size={10} />
-                    {remainingTime}
-                  </span>
-                )}
-              </>
+
+            {/* Seedance: queue position */}
+            {isQueued && (task.queuePosition ?? -1) >= 0 && (
+              <span className="text-xs text-warning font-mono bg-warning/10 px-1.5 py-0.5 rounded">
+                第 {(task.queuePosition! + 1).toLocaleString()} 位
+              </span>
             )}
+
+            {/* Kling: stage message */}
+            {isKling && isGenerating && task.statusMessage && (
+              <span className="text-xs text-text-muted truncate max-w-[160px]">{task.statusMessage}</span>
+            )}
+
             {isFailed && task.error && (
-              <span className="text-xs text-error/70 truncate max-w-[180px]">{task.error}</span>
+              <span className="text-xs text-error/70 truncate max-w-[160px]">{task.error}</span>
             )}
           </div>
 
+          {/* Seedance queued: countdown */}
+          {isQueued && minsLeft !== null && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <Clock size={10} className="text-text-disabled" />
+              <span className="text-[11px] text-text-disabled">
+                {minsLeft > 0 ? `${minsLeft} 分钟后刷新排队进度` : '即将刷新...'}
+              </span>
+            </div>
+          )}
+
           {/* Progress bar */}
-          {isGenerating && progress > 0 && (
+          {showProgressBar && (
             <div className="mt-2">
+              <span className="text-[10px] text-text-disabled block mb-1">{displayProgress}%</span>
               <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-brand transition-all"
-                  style={{ width: `${progress}%` }}
+                  className="h-full bg-brand rounded-full transition-all duration-[3000ms] ease-linear"
+                  style={{ width: `${displayProgress}%` }}
                 />
               </div>
             </div>
@@ -223,11 +258,11 @@ function TaskCard({ task }: { task: TaskRecord }) {
             return (
               <button
                 onClick={() => window.api.openFile?.(filePath)}
-              className="p-1 rounded-md hover:bg-brand/15 hover:text-brand text-text-muted transition-colors"
-              title="打开文件"
-            >
-              <Play size={14} />
-            </button>
+                className="p-1 rounded-md hover:bg-brand/15 hover:text-brand text-text-muted transition-colors"
+                title="打开文件"
+              >
+                <Play size={14} />
+              </button>
             );
           })()}
           <button

@@ -6,6 +6,35 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
+const { slugify, makeVideoName } = require('./videoName');
+
+/**
+ * 安全重命名：如果目标文件已存在则追加 _2, _3, ...
+ */
+function safeRename(src, dest) {
+  if (src === dest) return src;
+  const ext = path.extname(dest);
+  const base = dest.slice(0, dest.length - ext.length);
+  let target = dest;
+  let counter = 2;
+  // Try-rename loop: avoids TOCTOU by letting the OS signal collision via EEXIST
+  for (;;) {
+    try {
+      fs.renameSync(src, target);
+      return target;
+    } catch (e) {
+      if (e.code === 'EEXIST') {
+        target = `${base}_${counter}${ext}`;
+        counter++;
+      } else {
+        // ENOENT: src already gone; ENOTEMPTY: dest is a directory (Windows) — bail
+        console.warn('[重命名] 失败:', e.message);
+        return src;
+      }
+    }
+  }
+}
+
 // 即梦 CLI 路径（开发模式 vs 生产模式）
 function getDreaminaBin() {
   const isDev = !app.isPackaged;
@@ -384,49 +413,52 @@ function ensureAIService() {
   return aiService;
 }
 
-// ===== 任务状态轮询（后台定时器） =====
-const pollingTasks = new Map(); // submit_id -> { timer, task }
+// ===== 任务状态轮询（自适应 setTimeout） =====
+const POLL_INTERVAL_INITIAL  =   5_000; // 首次：提交后 5s 快速取位置
+const POLL_INTERVAL_QUEUED   = 180_000; // 排队中：每 3 分钟（Seedance 队列每位约需数分钟）
+const POLL_INTERVAL_FALLBACK =  30_000; // 未知状态兜底
+
+const pollingTasks = new Map(); // submit_id -> { timer, task, cancelled }
 
 function startPolling(submitId, task) {
   if (pollingTasks.has(submitId)) return;
-  
+
   console.log(`[轮询] 开始轮询 submit_id=${submitId}`);
-  
-  const timer = setInterval(async () => {
+
+  const entry = { timer: null, task, cancelled: false };
+  pollingTasks.set(submitId, entry);
+
+  async function doPoll() {
+    if (entry.cancelled) return;
+
     const result = await callDreamina(['query_result', '--submit_id=' + submitId], 30000);
-    
+
+    if (entry.cancelled) return;
+
     if (!result.success) {
       console.warn(`[轮询] 查询失败: ${result.error}`);
+      entry.timer = setTimeout(doPoll, POLL_INTERVAL_FALLBACK);
       return;
     }
-    
+
     const data = parseCliJson(result.stdout);
     if (!data) {
       console.warn(`[轮询] JSON 解析失败: ${result.stdout.slice(0, 100)}`);
+      entry.timer = setTimeout(doPoll, POLL_INTERVAL_FALLBACK);
       return;
     }
-    
-    const status = data.gen_status || data.status || 'unknown';
-    console.log(`[轮询] submit_id=${submitId} status=${status}`);
-    
-    sendToRenderer('task:progress', {
-      event: 'progress',
-      data: {
-        submitId,
-        status,
-        progress: status === 'success' ? 100 : (status === 'failed' ? 0 : 50),
-        message: status === 'generating' ? '生成中...' : (status === 'success' ? '已完成' : '失败'),
-      },
-    });
-    
-    // 完成或失败时停止轮询
-    if (status === 'success' || status === 'failed') {
+
+    const genStatus = data.gen_status || data.status || 'unknown';
+    const queueInfo = data.queue_info || {};
+    const queueIdx    = queueInfo.queue_idx    ?? -1;
+    const queueLength = queueInfo.queue_length  ?? 0;
+    console.log(`[轮询] submit_id=${submitId} gen_status=${genStatus} queue_idx=${queueIdx}`);
+
+    if (genStatus === 'success' || genStatus === 'failed') {
       stopPolling(submitId);
-      
-      if (status === 'success') {
-        // 触发下载
+
+      if (genStatus === 'success') {
         const downloadDir = task.downloadDir || settings.downloadDir;
-        // 确保下载目录存在
         try { fs.mkdirSync(downloadDir, { recursive: true }); } catch {}
 
         const downloadResult = await callDreamina([
@@ -439,7 +471,6 @@ function startPolling(submitId, task) {
           const downloadData = parseCliJson(downloadResult.stdout);
           let filePath = downloadData?.download_path || downloadData?.file_path || '';
 
-          // 路径为空时：尝试在目录里找最新的视频文件
           if (!filePath || !fs.existsSync(filePath)) {
             console.warn(`[下载] filePath 为空或文件不存在: "${filePath}"，尝试在目录中查找`);
             try {
@@ -456,33 +487,22 @@ function startPolling(submitId, task) {
             }
           }
 
-          console.log(`[下载] 完成 filePath="${filePath}" downloadDir="${downloadDir}"`);
+          // 重命名为可读文件名
+          const desiredName = makeVideoName(task.prompt, task.model, task.duration);
+          const desiredPath = path.join(downloadDir, desiredName);
+          filePath = safeRename(filePath, desiredPath);
 
+          console.log(`[下载] 完成 filePath="${filePath}" downloadDir="${downloadDir}"`);
           sendToRenderer('task:progress', {
             event: 'result',
-            data: {
-              submitId,
-              prompt: task.prompt,
-              status: 'completed',
-              filePath,
-              downloadDir,
-            },
+            data: { submitId, prompt: task.prompt, status: 'completed', filePath, downloadDir },
           });
-
           sendTaskNotification(task);
         } else {
           console.warn(`[下载] 失败: ${downloadResult.error}`);
-          // 下载失败也通知前端（不标记为成功）
           sendToRenderer('task:progress', {
             event: 'result',
-            data: {
-              submitId,
-              prompt: task.prompt,
-              status: 'completed',
-              filePath: '',
-              downloadDir,
-              downloadError: downloadResult.error,
-            },
+            data: { submitId, prompt: task.prompt, status: 'completed', filePath: '', downloadDir, downloadError: downloadResult.error },
           });
         }
       } else {
@@ -491,16 +511,25 @@ function startPolling(submitId, task) {
           data: { submitId, error: data.error || '生成失败' },
         });
       }
+    } else {
+      // 仍在排队（Seedance 目前只有这种情况）
+      const nextPollAt = Date.now() + POLL_INTERVAL_QUEUED;
+      sendToRenderer('task:progress', {
+        event: 'queued',
+        data: { submitId, queuePosition: queueIdx, queueLength, nextPollAt },
+      });
+      entry.timer = setTimeout(doPoll, POLL_INTERVAL_QUEUED);
     }
-  }, 5000); // 每 5 秒轮询一次
-  
-  pollingTasks.set(submitId, { timer, task });
+  }
+
+  entry.timer = setTimeout(doPoll, POLL_INTERVAL_INITIAL);
 }
 
 function stopPolling(submitId) {
   const entry = pollingTasks.get(submitId);
   if (entry) {
-    clearInterval(entry.timer);
+    entry.cancelled = true;
+    clearTimeout(entry.timer);
     pollingTasks.delete(submitId);
     console.log(`[轮询] 停止轮询 submit_id=${submitId}`);
   }
@@ -729,7 +758,7 @@ function registerIpcHandlers() {
     console.log('[执行任务] ✅ submit_id:', submitId);
 
     // 开始轮询
-    startPolling(submitId, { prompt, downloadDir: settings.downloadDir });
+    startPolling(submitId, { prompt, model, duration, downloadDir: settings.downloadDir });
 
     return {
       success: true,
@@ -783,7 +812,7 @@ function registerIpcHandlers() {
     console.log('[执行任务(有素材)] ✅ submit_id:', submitId);
 
     // 开始轮询
-    startPolling(submitId, { prompt, downloadDir: settings.downloadDir, materials });
+    startPolling(submitId, { prompt, model, duration, downloadDir: settings.downloadDir, materials });
 
     return {
       success: true,
@@ -819,7 +848,7 @@ function registerIpcHandlers() {
     if (!data || !data.submit_id) return { success: false, error: 'CLI 未返回 submit_id' };
 
     const submitId = data.submit_id;
-    startPolling(submitId, { prompt, downloadDir: settings.downloadDir, materials });
+    startPolling(submitId, { prompt, model, duration, downloadDir: settings.downloadDir, materials });
     return { success: true, submitId, prompt, message: '任务已提交' };
   });
 
@@ -907,40 +936,51 @@ function registerIpcHandlers() {
 
   // ── 可灵 O1 图生视频（Coze API）──────────────────────────────────
   const { klingGenerate } = require('./coze');
-  ipcMain.handle('kling:generate', async (_event, { imagePaths, prompt, duration, aspectRatio }) => {
+  ipcMain.handle('kling:generate', async (_event, { imagePaths, prompt, duration, aspectRatio, submitId: clientSubmitId }) => {
     console.log('[Kling] 开始生成，图片数:', imagePaths?.length, '时长:', duration, '比例:', aspectRatio);
 
-    const submitId = 'kling_' + Date.now();
+    // Renderer generates submitId so it can register the task before progress events arrive
+    const submitId = clientSubmitId || 'kling_' + Date.now();
     const downloadDir = path.join(settings.downloadDir || path.join(require('os').homedir(), 'Downloads', '即梦'), '可灵O1');
 
-    // Report initial progress to renderer
-    sendToRenderer('task:progress', {
-      event: 'progress',
-      data: { submitId, progressType: 'submitting', message: '正在上传图片...' },
-    });
+    // Stage-to-progress mapping for the renderer's progress bar
+    // Stages: upload(5-25%) → submitted(30%) → generating(30-90%, crawl) → downloading(90%)
+    function sendKlingProgress(stage, message, progress) {
+      sendToRenderer('task:progress', {
+        event: 'kling-progress',
+        data: { submitId, stage, message, progress },
+      });
+    }
+
+    sendKlingProgress('upload', `上传图片 (共 ${imagePaths.length} 张)...`, 5);
+
+    // Track per-image upload progress
+    let uploadedCount = 0;
+    const totalImages = imagePaths.length;
 
     try {
       const result = await klingGenerate(
         { imagePaths, prompt, duration, aspectRatio, downloadDir },
         (msg) => {
-          sendToRenderer('task:progress', {
-            event: 'progress',
-            data: { submitId, progressType: 'generating', message: msg, progress: 50 },
-          });
+          if (msg.includes('上传图片') || msg.includes('上传完成')) {
+            uploadedCount++;
+            const pct = 5 + Math.round((uploadedCount / totalImages) * 20); // 5→25%
+            sendKlingProgress('upload', msg, Math.min(pct, 25));
+          } else if (msg.includes('已提交') || msg.includes('等待生成')) {
+            sendKlingProgress('submitted', msg, 30);
+          } else if (msg.includes('下载')) {
+            sendKlingProgress('downloading', msg, 90);
+          } else {
+            // SSE node messages — keep at 30, client-side crawl takes it to 90
+            sendKlingProgress('generating', msg, 30);
+          }
         }
       );
 
       if (result.success) {
         sendToRenderer('task:progress', {
           event: 'result',
-          data: {
-            submitId,
-            status: 'completed',
-            filePath: result.localPath || '',
-            resultUrl: result.videoUrl,
-            downloadDir,
-            prompt,
-          },
+          data: { submitId, status: 'completed', filePath: result.localPath || '', resultUrl: result.videoUrl, downloadDir, prompt },
         });
         return { success: true, videoUrl: result.videoUrl, localPath: result.localPath, submitId };
       } else {

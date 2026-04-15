@@ -11,6 +11,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { makeVideoName } = require('./videoName');
 
 const COZE_PAT = 'pat_S9JEK3AHHUfllNAupHRVNuxw4ZBkqUziZOeGpaUR5meX50Q5iSKZPzHc7b4xBVXk';
 const KLING_O1_WORKFLOW_ID = '7579615132323233807';
@@ -198,8 +199,10 @@ function callKlingWorkflow(imageUrls, prompt, duration, aspectRatio, onProgress)
 
 // ── Step 3: Download video ────────────────────────────────────────────────────
 
-function downloadVideo(videoUrl, outputPath) {
+function downloadVideo(videoUrl, outputPath, _redirectDepth = 0) {
   return new Promise((resolve, reject) => {
+    if (_redirectDepth > 10) return reject(new Error('Too many redirects'));
+
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
     const urlObj = new URL(videoUrl);
@@ -213,7 +216,7 @@ function downloadVideo(videoUrl, outputPath) {
         try { fs.unlinkSync(outputPath); } catch {}
         const location = response.headers.location;
         if (!location) return reject(new Error('Redirect without location'));
-        return downloadVideo(location, outputPath).then(resolve).catch(reject);
+        return downloadVideo(location, outputPath, _redirectDepth + 1).then(resolve).catch(reject);
       }
       if (response.statusCode !== 200) {
         file.close();
@@ -249,18 +252,18 @@ function downloadVideo(videoUrl, outputPath) {
 async function klingGenerate({ imagePaths, prompt, duration, aspectRatio, downloadDir }, onProgress) {
   console.log('[Coze] klingGenerate start — images:', imagePaths?.length, 'duration:', duration);
 
-  // 1. Upload images
-  const imageUrls = [];
-  for (let i = 0; i < imagePaths.length; i++) {
-    if (onProgress) onProgress(`上传图片 ${i + 1}/${imagePaths.length}...`);
-    try {
-      const url = await uploadFileToCoze(imagePaths[i]);
-      imageUrls.push(url);
+  // 1. Upload images in parallel
+  if (onProgress) onProgress(`上传图片 (共 ${imagePaths.length} 张)...`);
+  let imageUrls;
+  try {
+    imageUrls = await Promise.all(imagePaths.map(async (p, i) => {
+      const url = await uploadFileToCoze(p);
       console.log(`[Coze] 图片 ${i + 1} 上传完成: ${url.slice(0, 60)}...`);
-    } catch (err) {
-      console.error('[Coze] 图片上传失败:', err.message);
-      return { success: false, error: `图片上传失败: ${err.message}` };
-    }
+      return url;
+    }));
+  } catch (err) {
+    console.error('[Coze] 图片上传失败:', err.message);
+    return { success: false, error: `图片上传失败: ${err.message}` };
   }
 
   // 2. Call workflow
@@ -277,7 +280,8 @@ async function klingGenerate({ imagePaths, prompt, duration, aspectRatio, downlo
   // 3. Download video
   const dir = downloadDir || path.join(require('os').homedir(), 'Downloads', '可灵O1');
   fs.mkdirSync(dir, { recursive: true });
-  const filename = `kling_${Date.now()}.mp4`;
+
+  const filename = makeVideoName(prompt, 'kling', duration);
   const localPath = path.join(dir, filename);
 
   if (onProgress) onProgress('正在下载视频...');

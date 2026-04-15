@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal, Paperclip, FolderOpen } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem, type Skill } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
-import { localFileUrl, localFileUrlSync } from '../utils/localFile';
+import { localFileUrl, localFileUrlSync, isVideoFile, isAudioFile, isImageFile, getFileType } from '../utils/localFile';
 
 // ── Mode Select Card (选择单个/批量) ──
 function ModeSelectCard({ onSelect }: { onSelect: (mode: TaskMode) => void }) {
@@ -875,9 +875,9 @@ function AttachmentStack({ files, onView, onRemove, onAdd, canAdd }: {
       onMouseLeave={() => setHovered(false)}
     >
       {files.map((file, i) => {
-        const isImg = /\.(jpg|jpeg|png|webp)$/i.test(file);
-        const isVid = /\.(mp4|mov)$/i.test(file);
-        const isAud = /\.(mp3|wav|aac|m4a)$/i.test(file);
+        const isImg = isImageFile(file);
+        const isVid = isVideoFile(file);
+        const isAud = isAudioFile(file);
         const name = (file.split('/').pop() || '').replace(/\.[^.]+$/, '');
         const ext  = (file.split('.').pop() || 'AUD').toUpperCase();
         const isFront = i === frontIdx;
@@ -1526,6 +1526,42 @@ export function ChatPanel() {
   const [selectedModel, setSelectedModel] = useState('seedance2.0fast');
   const [selectedDuration, setSelectedDuration] = useState(5);
   const [selectedRatio, setSelectedRatio] = useState('9:16');
+
+  // ── Auto-duration: Seedance + reference videos ───────────────────────────
+  // When reference videos are added/removed while using a SeedDance model,
+  // auto-set selectedDuration to the sum of all video durations (clamped 4–15s).
+  // Only fires when the video subset changes (not on image/audio add/remove).
+  const prevVidFilesRef = useRef<string[]>([]);
+  useEffect(() => {
+    const VID_EXTS = /\.(mp4|mov)$/i;
+    const vidFiles = selectedFiles.filter(f => VID_EXTS.test(f));
+
+    // Bail out if video list hasn't changed (avoids re-firing on image/audio edits)
+    const prev = prevVidFilesRef.current;
+    const vidChanged = vidFiles.length !== prev.length || vidFiles.some((f, i) => f !== prev[i]);
+    prevVidFilesRef.current = vidFiles;
+
+    if (!vidChanged || !vidFiles.length || selectedModel === 'kling-o1') return;
+
+    let cancelled = false;
+    (async () => {
+      let total = 0;
+      for (const f of vidFiles) {
+        const dur = await new Promise<number>((resolve) => {
+          const el = document.createElement('video');
+          el.preload = 'metadata';
+          el.onloadedmetadata = () => resolve(isFinite(el.duration) ? el.duration : 0);
+          el.onerror = () => resolve(0);
+          el.src = localFileUrlSync(f);
+        });
+        total += dur;
+      }
+      if (cancelled) return;
+      setSelectedDuration(Math.min(15, Math.max(4, Math.round(total))));
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedFiles, selectedModel]);
   const [showParams, setShowParams] = useState(false);
   const [useStructuredFlow] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('vidclaw_onboarded'));
@@ -1544,41 +1580,32 @@ export function ChatPanel() {
   function handleEditMaterial(index: number, newDesc: string) {
     if (!pendingTask || !pendingTask.materials) return;
 
-    // 更新素材描述
-    const allMaterials = [
-      ...(pendingTask.materials.images || []),
-      ...(pendingTask.materials.videos || []),
-      ...(pendingTask.materials.audios || []),
-    ];
-
+    const images: any[] = pendingTask.materials.images || [];
+    const videos: any[] = pendingTask.materials.videos || [];
+    const audios: any[] = pendingTask.materials.audios || [];
+    const allMaterials = [...images, ...videos, ...audios];
     if (index >= allMaterials.length) return;
 
-    const material = allMaterials[index];
-    material.description = newDesc;
-
-    // 根据 type 更新回对应的数组
+    // Build updated arrays immutably
     let imgIdx = 0, vidIdx = 0, audIdx = 0;
+    const newImages = [...images];
+    const newVideos = [...videos];
+    const newAudios = [...audios];
+
     allMaterials.forEach((m, i) => {
       if (m.type === 'image') {
-        if (i === index) {
-          pendingTask.materials.images[imgIdx] = m;
-        }
+        if (i === index) newImages[imgIdx] = { ...m, description: newDesc };
         imgIdx++;
       } else if (m.type === 'video') {
-        if (i === index) {
-          pendingTask.materials.videos[vidIdx] = m;
-        }
+        if (i === index) newVideos[vidIdx] = { ...m, description: newDesc };
         vidIdx++;
       } else if (m.type === 'audio') {
-        if (i === index) {
-          pendingTask.materials.audios[audIdx] = m;
-        }
+        if (i === index) newAudios[audIdx] = { ...m, description: newDesc };
         audIdx++;
       }
     });
 
-    // 触发重新渲染（通过 setPendingTask）
-    setPendingTask({ ...pendingTask });
+    setPendingTask({ ...pendingTask, materials: { images: newImages, videos: newVideos, audios: newAudios } });
   }
 
   // Auto-scroll
@@ -1744,10 +1771,10 @@ export function ChatPanel() {
     let imageIdx = 0, videoIdx = 0, audioIdx = 0;
     selectedFiles.forEach(f => {
       const filename = f.split('/').pop() || f;
-      if (/\.(mp4|mov|avi|webm)$/i.test(f)) {
+      if (isVideoFile(f)) {
         videoIdx++;
         materials.videos.push({ type: 'video', name: `视频${videoIdx}`, filename, path: f });
-      } else if (/\.(mp3|wav|aac|m4a|flac)$/i.test(f)) {
+      } else if (isAudioFile(f)) {
         audioIdx++;
         materials.audios.push({ type: 'audio', name: `音频${audioIdx}`, filename, path: f });
       } else {
@@ -1873,10 +1900,10 @@ export function ChatPanel() {
     let imgIdx = 0, vidIdx = 0, audIdx = 0;
     selectedFiles.forEach(f => {
       const filename = f.split('/').pop() || f;
-      if (/\.(mp4|mov|avi|webm)$/i.test(f)) {
+      if (isVideoFile(f)) {
         vidIdx++;
         batchMaterials.videos.push({ type: 'video', name: `视频${vidIdx}`, filename, path: f });
-      } else if (/\.(mp3|wav|aac|m4a|flac)$/i.test(f)) {
+      } else if (isAudioFile(f)) {
         audIdx++;
         batchMaterials.audios.push({ type: 'audio', name: `音频${audIdx}`, filename, path: f });
       } else {
@@ -1974,9 +2001,7 @@ export function ChatPanel() {
 
     const directMaterials = hasFiles ? filesToSubmit.map(f => {
       const filename = f.split('/').pop() || f;
-      const type = /\.(mp4|mov|avi|webm)$/i.test(f) ? 'video'
-        : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image';
-      return { type, name: filename, path: f };
+      return { type: getFileType(f), name: filename, path: f };
     }) : [];
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -1998,7 +2023,7 @@ export function ChatPanel() {
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
-          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image') as 'image' | 'video' | 'audio',
+          type: getFileType(f),
         }));
         setStatusText('📤 正在上传素材...');
         const r = await window.api.runStructuredTask({
@@ -2082,6 +2107,15 @@ export function ChatPanel() {
       role: 'user',
       content: '确认提交',
       timestamp: new Date(),
+      type: 'submitted-summary',
+      data: {
+        kind: 'single',
+        prompt: effectiveTask.prompt,
+        materials: filesToSubmit.map(f => ({ path: f, type: getFileType(f) as 'image' | 'video' | 'audio' })),
+        model: selectedModel,
+        duration: selectedDuration,
+        aspectRatio: selectedRatio,
+      },
     });
 
     setSubmitting(true);
@@ -2094,7 +2128,7 @@ export function ChatPanel() {
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
-          type: (/\.(mp4|mov|avi|webm)$/i.test(f) ? 'video' : /\.(mp3|wav|aac|m4a|flac)$/i.test(f) ? 'audio' : 'image') as 'image' | 'video' | 'audio',
+          type: getFileType(f),
         }));
 
         setStatusText('📤 正在上传素材...');
@@ -2214,6 +2248,17 @@ export function ChatPanel() {
       role: 'user',
       content: `确认批量提交 (${liveTasks.length} 个任务)`,
       timestamp: new Date(),
+      type: 'submitted-summary',
+      data: {
+        kind: 'batch',
+        prompt: liveTasks[0]?.prompt ?? '',
+        prompts: liveTasks.map(t => t.prompt),
+        materials: (liveTasks[0]?.materials ?? []).map(m => ({ path: m.path, type: m.type as 'image' | 'video' | 'audio' })),
+        model: liveTasks[0]?.model,
+        duration: liveTasks[0]?.duration,
+        aspectRatio: liveTasks[0]?.aspectRatio,
+        taskCount: liveTasks.length,
+      },
     });
 
     setSubmitting(true);
@@ -2300,82 +2345,132 @@ export function ChatPanel() {
     if (!activeSkill) return;
     const skill = activeSkill;
     setActiveSkill(null);
+    const initialFiles = [...selectedFiles];
 
-    const flatMaterials = selectedFiles.map((f, idx) => {
-      const name = f.split('/').pop() || f;
-      const isVid = /\.(mp4|mov|avi|webm)$/i.test(f);
-      const isAud = /\.(mp3|wav|aac|m4a|flac)$/i.test(f);
-      const type = isVid ? 'video' : isAud ? 'audio' : 'image';
+    const flatMaterials = initialFiles.map((f, idx) => {
+      const type = getFileType(f);
       return { type, name: `${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}${idx + 1}`, path: f };
     });
 
-    const userMsg: Message = {
+    addMessage({
       id: Date.now().toString(),
       role: 'user',
       content: `[应用技能] ${skill.name}`,
       timestamp: new Date(),
       ...(flatMaterials.length > 0 && { data: { materials: flatMaterials } }),
-    };
-    addMessage(userMsg);
+    });
     setSelectedFiles([]);
     setInput('');
+    setGuidedStep('task-confirming');
 
-    if (skill.type === 'single' || skill.tasks.length === 1) {
-      // Single task — go directly to confirm card
-      setTaskMode('single');
-      setGuidedStep('task-confirming');
-      const imgs = flatMaterials.filter(m => m.type === 'image');
-      const vids = flatMaterials.filter(m => m.type === 'video');
-      const auds = flatMaterials.filter(m => m.type === 'audio');
-      const taskData = {
-        prompt: skill.tasks[0].prompt,
-        reason: `技能「${skill.name}」预设提示词`,
-        hasFiles: flatMaterials.length > 0,
-        selectedModel: skill.model,
-        selectedDuration: skill.duration,
-        selectedRatio: skill.aspectRatio,
-        materials: { images: imgs, videos: vids, audios: auds },
-      };
-      setPendingTask(taskData);
-      addMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-        type: 'ai-rewrite',
-        data: taskData,
-      });
-    } else {
-      // Batch skill — go directly to batch confirm card
-      setTaskMode('batch');
-      const batchMaterials = flatMaterials.map(m => ({ path: m.path, type: m.type as 'image' | 'video' | 'audio' }));
-      const mappedTasks: BatchTaskItem[] = skill.tasks.map((t, i) => ({
-        id: `task_${Date.now()}_${i}`,
-        index: i,
-        prompt: t.prompt,
-        reason: '',
-        materials: batchMaterials,
-        expectedEffect: t.expectedEffect || '',
+    addMessage({
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      type: 'skill-confirm',
+      data: { skill, initialFiles },
+    });
+  }
+
+  // ── 技能确认提交（单个任务）──
+  async function handleConfirmSkillTask(filePaths: string[], skill: Skill) {
+    const hasFiles = filePaths.length > 0;
+    const prompt = skill.tasks[0].prompt;
+
+    addMessage({
+      id: Date.now().toString() + '_confirm', role: 'user', content: '确认提交', timestamp: new Date(),
+      type: 'submitted-summary',
+      data: {
+        kind: 'single',
+        prompt,
+        materials: filePaths.map(f => ({ path: f, type: getFileType(f) as 'image' | 'video' | 'audio' })),
+        model: skill.model,
         duration: skill.duration,
         aspectRatio: skill.aspectRatio,
-        model: skill.model,
-        status: 'pending' as const,
-      }));
-      setBatchTasks(mappedTasks);
-      setGuidedStep('task-confirming');
-      addMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-        type: 'batch-confirm',
-        data: {
-          batchName: skill.name,
-          description: `技能「${skill.name}」批量任务`,
-          materials: flatMaterials,
-        },
-      });
+      },
+    });
+    setSubmitting(true);
+    setGuidedStep('task-executing');
+    setStatusText('⏳ 正在提交任务...');
+
+    try {
+      if (hasFiles) {
+        const materials: TaskMaterial[] = filePaths.map(f => ({ path: f, type: getFileType(f) }));
+        setStatusText('📤 正在上传素材...');
+        const result = await window.api.runStructuredTask({ prompt, materials, model: skill.model, duration: skill.duration, aspectRatio: skill.aspectRatio });
+        if (result.success) {
+          addTask({ id: 'task_' + Date.now(), submitId: (result as any).submitId, prompt, type: 'video', status: 'generating', model: skill.model, duration: skill.duration, materials: [], createdAt: Date.now(), startTime: Date.now(), retryCount: 0 });
+          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: `✅ 结构化任务已提交！\n模型: ${skill.model} | 时长: ${skill.duration}s | 比例: ${skill.aspectRatio}`, timestamp: new Date() });
+        } else {
+          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 提交失败: ${result.error}`, timestamp: new Date(), type: 'error' });
+        }
+      } else {
+        const result = await window.api.executeTask({ prompt, model: skill.model, duration: skill.duration, aspectRatio: skill.aspectRatio });
+        if (result.success) {
+          addTask({ id: 'task_' + Date.now(), submitId: (result as any).submitId, prompt, type: 'video', status: 'generating', model: skill.model, duration: skill.duration, materials: [], createdAt: Date.now(), startTime: Date.now(), retryCount: 0 });
+          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: '✅ 任务已提交！即梦正在生成中，结果会自动展示。', timestamp: new Date() });
+        } else {
+          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 提交失败: ${result.error}`, timestamp: new Date(), type: 'error' });
+        }
+      }
+    } catch (err) {
+      addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 执行出错: ${err}`, timestamp: new Date(), type: 'error' });
+    } finally {
+      setSubmitting(false);
+      setStatusText('');
+      setGuidedStep('logged-in-ready');
     }
+  }
+
+  // ── 技能确认提交（批量任务）──
+  async function handleConfirmSkillBatch(filePaths: string[], skill: Skill) {
+    const batchMaterialsForTask = filePaths.map(f => ({ path: f, type: getFileType(f) as 'image' | 'video' | 'audio' }));
+    const mappedTasks: BatchTaskItem[] = skill.tasks.map((t, i) => ({
+      id: `task_${Date.now()}_${i}`, index: i, prompt: t.prompt, reason: '',
+      materials: batchMaterialsForTask, expectedEffect: t.expectedEffect || '',
+      duration: skill.duration, aspectRatio: skill.aspectRatio, model: skill.model, status: 'pending' as const,
+    }));
+    setBatchTasks(mappedTasks);
+    setTaskMode('batch');
+
+    addMessage({
+      id: Date.now().toString() + '_batch_confirm', role: 'user', content: `确认批量提交 (${skill.tasks.length} 个任务)`, timestamp: new Date(),
+      type: 'submitted-summary',
+      data: {
+        kind: 'batch',
+        prompt: skill.tasks[0]?.prompt ?? '',
+        prompts: skill.tasks.map(t => t.prompt),
+        materials: filePaths.map(f => ({ path: f, type: getFileType(f) as 'image' | 'video' | 'audio' })),
+        model: skill.model,
+        duration: skill.duration,
+        aspectRatio: skill.aspectRatio,
+        taskCount: skill.tasks.length,
+      },
+    });
+    setSubmitting(true);
+    setGuidedStep('task-executing');
+    setStatusText('⏳ 正在创建批量任务...');
+
+    try {
+      const batch = { id: 'batch_' + Date.now(), name: skill.name, description: `技能「${skill.name}」批量任务`, totalTasks: mappedTasks.length, completedTasks: 0, status: 'pending' as const, createdAt: new Date().toISOString(), downloadDir: '' };
+      const createResult = await window.api.createBatch(batch, mappedTasks);
+      if (!createResult.success) throw new Error(createResult.error || '创建批量任务失败');
+      const startResult = await window.api.startBatch();
+      if (!startResult.success) throw new Error(startResult.error || '启动批量任务失败');
+      addMessage({ id: Date.now().toString() + '_batch_started', role: 'assistant', content: `🚀 批量任务已启动！共 ${mappedTasks.length} 个任务，正在逐个提交...\n\n结果会自动展示。`, timestamp: new Date() });
+    } catch (err) {
+      addMessage({ id: Date.now().toString() + '_batch_fail', role: 'assistant', content: `❌ 批量任务失败: ${err}`, timestamp: new Date(), type: 'error' });
+    } finally {
+      setSubmitting(false);
+      setStatusText('');
+      setGuidedStep('logged-in-ready');
+    }
+  }
+
+  function handleCancelSkill(msgId: string) {
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+    setGuidedStep('logged-in-ready');
   }
 
   // ── 保存为技能 ──
@@ -2392,6 +2487,7 @@ export function ChatPanel() {
         duration: selectedDuration,
         aspectRatio: selectedRatio,
         tasks: [{ prompt: saveSkillContext.prompt || '' }],
+        materialSlots: selectedFiles.map(f => ({ type: getFileType(f) })),
         createdAt: now,
         updatedAt: now,
         usedCount: 0,
@@ -2407,6 +2503,7 @@ export function ChatPanel() {
         duration: liveTasks[0]?.duration || selectedDuration,
         aspectRatio: liveTasks[0]?.aspectRatio || selectedRatio,
         tasks: liveTasks.map(t => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
+        materialSlots: (liveTasks[0]?.materials || []).map(m => ({ type: m.type as 'image' | 'video' | 'audio' })),
         createdAt: now,
         updatedAt: now,
         usedCount: 0,
@@ -2500,37 +2597,56 @@ export function ChatPanel() {
       });
       return;
     }
-    // Deduct credits pre-flight
     deductCredits(cost, `可灵 O1 · ${duration}s 视频`);
     addMessage({
       id: Date.now().toString() + '_kling_submit',
       role: 'user',
-      content: `确认提交 · ${duration}s · ${aspectRatio} · ${cost} 积分`,
+      content: '确认提交',
       timestamp: new Date(),
+      type: 'submitted-summary',
+      data: {
+        kind: 'kling',
+        prompt,
+        materials: imagePaths.map((p: string) => ({ path: p, type: 'image' as const })),
+        model: 'kling-o1',
+        duration,
+        aspectRatio,
+      },
     });
+
+    // Register task in queue BEFORE the IPC call so progress events can find it by submitId
+    const submitId = 'kling_' + Date.now();
+    const taskId = 'task_' + Date.now();
+    addTask({
+      id: taskId,
+      submitId,
+      prompt,
+      type: 'video',
+      status: 'generating',
+      progress: 0,
+      statusMessage: '准备中...',
+      model: 'kling-o1',
+      duration,
+      materials: imagePaths.map((p: string) => ({ path: p, type: 'image' as const })),
+      createdAt: Date.now(),
+      retryCount: 0,
+    });
+
     setSubmitting(true);
     setGuidedStep('task-executing');
     setStatusText('⏳ 正在生成可灵 O1 视频...');
     try {
-      const result = await window.api.klingGenerate({ imagePaths, prompt, duration, aspectRatio });
+      const result = await window.api.klingGenerate({ imagePaths, prompt, duration, aspectRatio, submitId });
       if (result.success) {
-        const submitId = result.submitId || 'kling_' + Date.now();
-        addTask({
-          id: 'task_' + Date.now(),
-          submitId,
-          prompt,
-          type: 'video',
+        useStore.getState().updateTask(taskId, {
           status: result.localPath ? 'downloaded' : 'completed',
-          model: 'kling-o1',
-          duration,
-          materials: imagePaths.map((p: string) => ({ path: p, type: 'image' as const })),
           resultUrl: result.videoUrl,
           localPath: result.localPath || undefined,
           filePath: result.localPath || undefined,
           downloaded: !!result.localPath,
-          createdAt: Date.now(),
           completedAt: Date.now(),
-          retryCount: 0,
+          progress: 100,
+          statusMessage: '已完成',
         });
         addHistory({
           id: 'hist_' + Date.now(),
@@ -2550,6 +2666,7 @@ export function ChatPanel() {
         });
       } else {
         addCredits(cost, '可灵 O1 生成失败退款');
+        useStore.getState().updateTask(taskId, { status: 'failed', error: result.error, progress: 0 });
         addMessage({
           id: Date.now().toString() + '_kling_fail',
           role: 'assistant',
@@ -2560,6 +2677,7 @@ export function ChatPanel() {
       }
     } catch (err: any) {
       addCredits(cost, '可灵 O1 生成失败退款');
+      useStore.getState().updateTask(taskId, { status: 'failed', error: err?.message || String(err), progress: 0 });
       addMessage({
         id: Date.now().toString() + '_kling_err',
         role: 'assistant',
@@ -2651,6 +2769,34 @@ export function ChatPanel() {
         return;
       }
 
+      if (data.event === 'queued' && data.data?.submitId) {
+        const found = useStore.getState().tasks.find(t => t.submitId === data.data.submitId);
+        if (found) {
+          const { queuePosition, queueLength } = data.data;
+          if (found.status !== 'queued' || found.queuePosition !== queuePosition || found.queueLength !== queueLength) {
+            useStore.getState().updateTask(found.id, {
+              status: 'queued',
+              queuePosition,
+              queueLength,
+              nextPollAt: data.data.nextPollAt,
+            });
+          }
+        }
+        return;
+      }
+
+      if (data.event === 'kling-progress' && data.data?.submitId) {
+        const found = useStore.getState().tasks.find(t => t.submitId === data.data.submitId);
+        if (found && (found.progress !== data.data.progress || found.statusMessage !== data.data.message)) {
+          useStore.getState().updateTask(found.id, {
+            status: 'generating',
+            progress: data.data.progress,
+            statusMessage: data.data.message,
+          });
+        }
+        return;
+      }
+
       if (data.event === 'progress' && data.data?.submitId) {
         const found = useStore.getState().tasks.find(t => t.submitId === data.data.submitId);
         if (found) {
@@ -2735,6 +2881,33 @@ export function ChatPanel() {
           content: `📦 批量任务完成!\n✅ ${succeeded} 成功 / ❌ ${failed} 失败 / 共 ${total} 个任务`,
           timestamp: new Date(),
         });
+        // Persist completed batch to batchHistory for the works panel
+        const store = useStore.getState();
+        const liveBatchTasks = store.batchTasks;
+        const liveBatchInfo = store.batchInfo;
+        if (liveBatchInfo && liveBatchTasks.length > 0) {
+          const sharedMat = liveBatchTasks[0]?.materials ?? [];
+          store.addBatchHistory({
+            id: liveBatchInfo.id || ('batch_hist_' + Date.now()),
+            name: liveBatchInfo.name || '批量任务',
+            description: liveBatchInfo.description || '',
+            model: liveBatchTasks[0]?.model ?? '',
+            duration: liveBatchTasks[0]?.duration ?? 5,
+            aspectRatio: liveBatchTasks[0]?.aspectRatio ?? '9:16',
+            sharedMaterials: sharedMat.map(m => ({ path: m.path, type: m.type as 'image' | 'video' | 'audio' })),
+            totalTasks: total,
+            completedTasks: succeeded,
+            tasks: liveBatchTasks.map(bt => ({
+              index: bt.index,
+              prompt: bt.prompt,
+              status: (bt.status === 'downloaded' ? 'downloaded' : bt.status === 'failed' ? 'failed' : 'completed') as 'completed' | 'downloaded' | 'failed',
+              outputFile: bt.outputFile,
+              error: bt.error,
+            })),
+            createdAt: new Date(liveBatchInfo.createdAt).getTime(),
+            completedAt: Date.now(),
+          });
+        }
       } else if (data.event === 'batch-task-update') {
         const task = data.data;
         if (!task || task.index == null) return;
@@ -2961,7 +3134,7 @@ export function ChatPanel() {
           >
             <X size={15} className="text-[var(--color-text-muted,oklch(0.65_0.01_250))]" />
           </button>
-          {/\.(mp4|mov|avi|webm)$/i.test(viewFile) ? (
+          {isVideoFile(viewFile) ? (
             <video
               src={localFileUrlSync(viewFile)}
               controls
@@ -3040,6 +3213,14 @@ export function ChatPanel() {
                   onUpdateSkill={activeSkill && (msg.type === 'ai-rewrite' || msg.type === 'batch-confirm') ? (prompt?: string) => handleUpdateSkill(prompt) : undefined}
                   activeSkillName={activeSkill?.name}
                   onConfirmKling={msg.type === 'kling-confirm' ? handleConfirmKling : undefined}
+                  onConfirmSkill={msg.type === 'skill-confirm' ? (files, sk) => {
+                    if (sk.type === 'batch' && sk.tasks.length > 1) {
+                      handleConfirmSkillBatch(files, sk);
+                    } else {
+                      handleConfirmSkillTask(files, sk);
+                    }
+                  } : undefined}
+                  onCancelSkill={msg.type === 'skill-confirm' ? handleCancelSkill : undefined}
                 />
               </div>
             ))}
@@ -3357,6 +3538,367 @@ function getProgressText(step: GuidedStep): string {
 
 // ── Message Bubble ──
 // ── Kling Confirm Card ────────────────────────────────────────────────────────
+// ── Skill Material Slot ──
+function SkillMaterialSlot({
+  type, path, index, changed, onFill,
+}: {
+  type: 'image' | 'video' | 'audio';
+  path: string | null;
+  index: number;
+  changed: boolean;
+  onFill: () => void;
+}) {
+  const typeIcon = type === 'image' ? '🖼️' : type === 'video' ? '🎬' : '🎵';
+  const typeLabel = type === 'image' ? '图片' : type === 'video' ? '视频' : '音频';
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative">
+        <button
+          onClick={onFill}
+          title={path ? '点击更换' : `点击添加${typeLabel}`}
+          className={`w-14 h-14 rounded-xl overflow-hidden transition-all ${
+            path
+              ? 'border border-border hover:border-brand'
+              : 'border-2 border-dashed border-border hover:border-brand bg-surface-2'
+          }`}
+        >
+          {!path ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
+              <span className="text-base">{typeIcon}</span>
+              <span className="text-[8px] text-text-muted leading-tight">点击添加</span>
+            </div>
+          ) : type === 'image' ? (
+            <img src={localFileUrlSync(path)} className="w-full h-full object-cover" alt=""
+              onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3'; }} />
+          ) : type === 'video' ? (
+            <VideoThumb path={path} size={40} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-purple-500/20">
+              <span className="text-purple-400 text-lg">♪</span>
+            </div>
+          )}
+        </button>
+        {/* Changed indicator */}
+        {changed && (
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-warning flex items-center justify-center shadow-sm">
+            <AlertTriangle size={8} className="text-white" />
+          </span>
+        )}
+        {/* Swap button for filled slots */}
+        {path && (
+          <button
+            onClick={onFill}
+            className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-surface-3 border border-border flex items-center justify-center hover:bg-brand hover:border-brand transition-all group"
+            title="更换文件"
+          >
+            <RefreshCw size={8} className="text-text-muted group-hover:text-white" />
+          </button>
+        )}
+      </div>
+      <span className="text-[9px] text-text-muted">{typeLabel}{index + 1}</span>
+    </div>
+  );
+}
+
+// ── Skill Confirm Card ──
+function SkillConfirmCard({
+  msgId, skill, initialFiles, onConfirmTask, onConfirmBatch, onCancel,
+}: {
+  msgId: string;
+  skill: Skill;
+  initialFiles: string[];
+  onConfirmTask: (files: string[], skill: Skill) => void;
+  onConfirmBatch: (files: string[], skill: Skill) => void;
+  onCancel: (msgId: string) => void;
+}) {
+  const slots = skill.materialSlots || [];
+  const isBatch = skill.type === 'batch' && skill.tasks.length > 1;
+
+  // Initialize: match initialFiles to slots by type
+  const [slotFiles, setSlotFiles] = useState<(string | null)[]>(() => {
+    const remaining = [...initialFiles];
+    return slots.map(slot => {
+      const idx = remaining.findIndex(f => getFileType(f) === slot.type);
+      if (idx >= 0) return remaining.splice(idx, 1)[0];
+      return null;
+    });
+  });
+
+  const [extraFiles, setExtraFiles] = useState<string[]>(() => {
+    // Files not matched to any slot
+    const usedSet = new Set<string>();
+    const remaining = [...initialFiles];
+    slots.forEach(slot => {
+      const idx = remaining.findIndex(f => getFileType(f) === slot.type);
+      if (idx >= 0) usedSet.add(remaining.splice(idx, 1)[0]);
+    });
+    return initialFiles.filter(f => !usedSet.has(f));
+  });
+
+  const [changedSlots, setChangedSlots] = useState<Set<number>>(new Set());
+  const setPreviewUrl = useStore(s => s.setPreviewUrl);
+
+  const hasEmpty = slotFiles.some(f => f === null);
+  const hasChanges = changedSlots.size > 0 || extraFiles.length > 0;
+  const allFiles = [...(slotFiles.filter(Boolean) as string[]), ...extraFiles];
+
+  async function handleFillSlot(index: number) {
+    const { files } = await window.api.selectFiles();
+    if (!files?.length) return;
+    const wasEmpty = slotFiles[index] === null;
+    setSlotFiles(prev => { const next = [...prev]; next[index] = files[0]; return next; });
+    if (!wasEmpty) setChangedSlots(prev => new Set([...prev, index]));
+  }
+
+  async function handleAddExtra() {
+    const { files } = await window.api.selectFiles();
+    if (!files?.length) return;
+    setExtraFiles(prev => [...prev, ...files]);
+  }
+
+  const modelLabel = ['seedance2.0fast', 'seedance_2.0_fast'].includes(skill.model)
+    ? 'Seedance 2.0 Fast'
+    : ['seedance2.0', 'seedance_2.0'].includes(skill.model)
+    ? 'Seedance 2.0'
+    : skill.model;
+
+  return (
+    <div className="bg-surface-2 border border-border rounded-md overflow-hidden max-w-[85%] animate-fade-in-up">
+      <div className="h-px bg-brand" />
+      <div className="p-4 space-y-3.5">
+
+        {/* Header */}
+        <div>
+          <p className="text-xs text-brand font-medium flex items-center gap-1.5 mb-1.5">
+            <Zap size={12} /> 技能 · {skill.name}
+          </p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[modelLabel, `${skill.duration}s`, skill.aspectRatio].map(tag => (
+              <span key={tag} className="px-2 py-0.5 bg-surface-3 rounded text-[10px] text-text-secondary font-mono">{tag}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Material Slots */}
+        {slots.length > 0 && (
+          <div>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">素材槽位</p>
+            <div className="flex flex-wrap items-end gap-3">
+              {slots.map((slot, i) => (
+                <SkillMaterialSlot
+                  key={i}
+                  type={slot.type}
+                  path={slotFiles[i] ?? null}
+                  index={i}
+                  changed={changedSlots.has(i)}
+                  onFill={() => handleFillSlot(i)}
+                />
+              ))}
+              {/* Extra files (unslotted) */}
+              {extraFiles.map((f, i) => {
+                const fileType = getFileType(f);
+                return (
+                <div key={i} className="relative flex flex-col items-center gap-1">
+                  <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-border">
+                    {fileType === 'image' ? (
+                      <img src={localFileUrlSync(f)} className="w-full h-full object-cover" alt="" />
+                    ) : fileType === 'video' ? (
+                      <VideoThumb path={f} size={36} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-purple-500/20">
+                        <span className="text-purple-400 text-base">♪</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setExtraFiles(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-surface-3 border border-border flex items-center justify-center hover:bg-error/80 hover:border-error transition-all"
+                    >
+                      <X size={7} className="text-text-muted" />
+                    </button>
+                  </div>
+                  <span className="text-[9px] text-text-muted">额外</span>
+                </div>
+                );
+              })}
+              {/* Add more */}
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  onClick={handleAddExtra}
+                  className="w-14 h-14 rounded-xl border-2 border-dashed border-border hover:border-brand flex flex-col items-center justify-center gap-0.5 transition-all"
+                >
+                  <Plus size={14} className="text-text-muted" />
+                  <span className="text-[8px] text-text-muted">更多</span>
+                </button>
+                <span className="text-[9px] text-transparent select-none">占位</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Warning when slots changed */}
+        {hasChanges && (
+          <div className="flex items-start gap-2 px-3 py-2 bg-warning/10 border border-warning/20 rounded-lg">
+            <AlertTriangle size={12} className="text-warning shrink-0 mt-0.5" />
+            <p className="text-[11px] text-warning leading-snug">素材已修改，效果可能与上次不同，或与提示词不完全匹配</p>
+          </div>
+        )}
+
+        {/* Tasks / Prompts */}
+        {!isBatch ? (
+          <div>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">提示词</p>
+            <p className="text-sm text-text-primary leading-relaxed bg-surface-3 rounded-lg px-3 py-2.5">
+              {skill.tasks[0]?.prompt}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">批量任务 ({skill.tasks.length} 条)</p>
+            <div className="space-y-1 max-h-[140px] overflow-y-auto pr-1">
+              {skill.tasks.map((task, i) => (
+                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-surface-3 rounded-lg">
+                  <span className="text-[10px] font-mono text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">#{i + 1}</span>
+                  <p className="text-xs text-text-secondary leading-relaxed">{task.prompt}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+          <button
+            onClick={() => isBatch ? onConfirmBatch(allFiles, skill) : onConfirmTask(allFiles, skill)}
+            disabled={hasEmpty}
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-all hover:-translate-y-0.5 disabled:hover:translate-y-0"
+          >
+            <CheckCircle size={14} />
+            确认提交
+          </button>
+          <button
+            onClick={() => onCancel(msgId)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs font-medium rounded-lg transition-all"
+          >
+            <X size={14} />
+            取消
+          </button>
+          {hasEmpty && (
+            <span className="text-[10px] text-warning">请填充所有槽位后再提交</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Model short-label map ────────────────────────────────────────────────────
+const MODEL_LABELS: Record<string, string> = {
+  'seedance2.0fast': 'Seedance Fast',
+  'seedance2.0':     'Seedance 2.0',
+  'kling-o1':        'Kling O1',
+};
+function modelLabel(m: string) { return MODEL_LABELS[m] || m; }
+
+// ── SubmittedSummaryBubble ───────────────────────────────────────────────────
+function SubmittedSummaryBubble({ data }: {
+  data: {
+    kind: 'single' | 'batch' | 'kling';
+    prompt: string;
+    materials?: Array<{ path: string; type: 'image' | 'video' | 'audio' }>;
+    model?: string;
+    duration?: number;
+    aspectRatio?: string;
+    taskCount?: number;       // batch
+    prompts?: string[];       // batch preview
+  };
+}) {
+  const MAX_THUMBS = 4;
+  const mats = data.materials ?? [];
+  const shown = mats.slice(0, MAX_THUMBS);
+  const extra = mats.length - MAX_THUMBS;
+
+  const isBatch = data.kind === 'batch';
+  const headerLabel = isBatch ? `批量提交  ·  ${data.taskCount ?? data.prompts?.length ?? 0} 个任务` : '已提交';
+
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] rounded-md overflow-hidden bg-brand/85 text-white text-sm shadow-sm">
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+          <span className="text-[11px] font-medium text-white/80 flex items-center gap-1">
+            <CheckCircle size={11} className="text-white/60" />
+            {headerLabel}
+          </span>
+          {data.model && (
+            <span className="text-[10px] text-white/55 bg-white/10 px-1.5 py-0.5 rounded">
+              {modelLabel(data.model)}
+            </span>
+          )}
+        </div>
+
+        {/* Prompt (single/kling) or task previews (batch) */}
+        <div className="px-3 pt-2.5 pb-1">
+          {isBatch && data.prompts?.length ? (
+            <ul className="space-y-0.5">
+              {data.prompts.slice(0, 3).map((p, i) => (
+                <li key={i} className="text-xs text-white/80 line-clamp-1">
+                  <span className="text-white/40 mr-1">{i + 1}.</span>{p}
+                </li>
+              ))}
+              {(data.prompts.length > 3) && (
+                <li className="text-[10px] text-white/40">+{data.prompts.length - 3} 个任务</li>
+              )}
+            </ul>
+          ) : (
+            <p className="text-sm text-white leading-relaxed line-clamp-3">{data.prompt}</p>
+          )}
+        </div>
+
+        {/* Material thumbnails */}
+        {shown.length > 0 && (
+          <div className="px-3 pt-1.5 pb-1 flex gap-1.5 flex-wrap">
+            {shown.map((m, i) => (
+              <div key={i} className="w-10 h-10 rounded-md overflow-hidden border border-white/15 flex-shrink-0 bg-black/20">
+                {m.type === 'image' ? (
+                  <img src={localFileUrlSync(m.path)} alt="" className="w-full h-full object-cover" />
+                ) : m.type === 'video' ? (
+                  <VideoThumb path={m.path} size={20} />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-white/50 text-base">♪</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {extra > 0 && (
+              <div className="w-10 h-10 rounded-md border border-white/15 bg-white/10 flex items-center justify-center flex-shrink-0">
+                <span className="text-[10px] text-white/60">+{extra}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Param tags */}
+        {(data.aspectRatio || data.duration) && (
+          <div className="px-3 pt-1 pb-2.5 flex gap-1.5 flex-wrap">
+            {data.aspectRatio && (
+              <span className="text-[10px] text-white/50 bg-white/8 border border-white/10 px-1.5 py-0.5 rounded">
+                {data.aspectRatio}
+              </span>
+            )}
+            {data.duration && (
+              <span className="text-[10px] text-white/50 bg-white/8 border border-white/10 px-1.5 py-0.5 rounded">
+                {data.duration}s
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function KlingConfirmCard({ data, onConfirm, onCancel }: {
   data: { prompt: string; imagePaths: string[]; duration: number; aspectRatio: string; cost: number };
   onConfirm: () => void;
@@ -3424,7 +3966,7 @@ function KlingConfirmCard({ data, onConfirm, onCancel }: {
   );
 }
 
-function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore, onSaveAsSkill, onUpdateSkill, activeSkillName, onConfirmKling }: {
+function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRetry, onLoginRetry, task, selectedModel, selectedDuration, selectedRatio, onDurationChange, onRatioChange, onModelChange, onEditMaterial, setGuidedStep, setMessages, setTaskMode, onInputRestore, onSaveAsSkill, onUpdateSkill, activeSkillName, onConfirmKling, onConfirmSkill, onCancelSkill }: {
   msg: Message;
   onDownload?: () => void;
   onGuideClick?: () => void;
@@ -3448,6 +3990,8 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
   onUpdateSkill?: (prompt?: string) => void;
   activeSkillName?: string;
   onConfirmKling?: (data: any) => void;
+  onConfirmSkill?: (files: string[], skill: Skill) => void;
+  onCancelSkill?: (msgId: string) => void;
 }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
@@ -3639,6 +4183,23 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
     );
   }
 
+  // Skill confirm card
+  if (msg.type === 'skill-confirm' && msg.data) {
+    const { skill, initialFiles } = msg.data as { skill: Skill; initialFiles: string[] };
+    return (
+      <div className="flex justify-start">
+        <SkillConfirmCard
+          msgId={msg.id}
+          skill={skill}
+          initialFiles={initialFiles}
+          onConfirmTask={onConfirmSkill ?? (() => {})}
+          onConfirmBatch={onConfirmSkill ?? (() => {})}
+          onCancel={onCancelSkill ?? (() => {})}
+        />
+      </div>
+    );
+  }
+
   // Kling O1 confirm card
   if (msg.type === 'kling-confirm' && msg.data) {
     const data = msg.data as any;
@@ -3759,6 +4320,11 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
         />
       </div>
     );
+  }
+
+  // Submitted summary bubble
+  if (msg.type === 'submitted-summary' && msg.data) {
+    return <SubmittedSummaryBubble data={msg.data} />;
   }
 
   // User vs Assistant messages

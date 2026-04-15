@@ -38,3 +38,11 @@ export function localFileUrlSync(absolutePath: string): string {
 export async function initLocalFileServer(): Promise<void> {
   await getPort();
 }
+
+// ── File type helpers ────────────────────────────────────────────────────────
+
+export const isVideoFile = (p: string) => /\.(mp4|mov|avi|webm)$/i.test(p);
+export const isAudioFile = (p: string) => /\.(mp3|wav|aac|m4a|flac)$/i.test(p);
+export const isImageFile = (p: string) => /\.(jpg|jpeg|png|webp|gif)$/i.test(p);
+export const getFileType = (p: string): 'video' | 'audio' | 'image' =>
+  isVideoFile(p) ? 'video' : isAudioFile(p) ? 'audio' : 'image';

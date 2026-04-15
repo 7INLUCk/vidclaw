@@ -10,6 +10,7 @@ import { SubscriptionPanel } from './components/SubscriptionPanel';
 import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { BatchTaskPanel } from './components/BatchTaskPanel';
+import { WorksPanel } from './components/WorksPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { VideoModal } from './components/VideoModal';
 import { Maximize2, Minimize2, PawPrint, Zap } from 'lucide-react';
@@ -77,6 +78,7 @@ declare global {
         prompt: string;
         duration: number;
         aspectRatio: string;
+        submitId?: string;
       }) => Promise<{ success: boolean; videoUrl?: string; localPath?: string; submitId?: string; error?: string }>;
     };
   }
@@ -131,14 +133,14 @@ export default function App() {
 
     const removeNotificationClick = window.api.onNotificationClick?.(({ taskId }) => {
       const store = useStore.getState();
-      store.setActivePanel('queue');
+      store.setActivePanel('works');
       store.setHighlightedTaskId(taskId);
     });
 
     const removeNotificationClickV2 = window.api.onNotificationClickV2?.(({ taskId, submitId }: { taskId: string; submitId: string }) => {
       console.log('[通知点击] taskId:', taskId, 'submitId:', submitId);
       const store = useStore.getState();
-      store.setActivePanel('queue');
+      store.setActivePanel('works');
       if (taskId) store.setHighlightedTaskId(taskId);
       // 如果有 submitId，也可以用它来定位任务
     });
@@ -209,6 +211,7 @@ export default function App() {
         <main className="flex-1 flex min-w-0">
           <div className="flex-1 flex flex-col min-w-0">
             {activePanel === 'chat' && <ChatPanel />}
+            {activePanel === 'works' && <WorksPanel />}
             {activePanel === 'queue' && <QueuePanel />}
             {activePanel === 'history' && <HistoryPanel />}
             {activePanel === 'skills' && <SkillsPanel />}

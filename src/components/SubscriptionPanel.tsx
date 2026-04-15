@@ -130,7 +130,7 @@ export function SubscriptionPanel() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Balance card */}
         <div className={`rounded-2xl p-5 ${isLow ? 'bg-error/10 border border-error/20' : 'bg-brand/10 border border-brand/20'}`}>
-          <p className="text-[11px] font-medium mb-1 flex items-center gap-1.5 ${isLow ? 'text-error' : 'text-brand'}">
+          <p className={`text-[11px] font-medium mb-1 flex items-center gap-1.5 ${isLow ? 'text-error' : 'text-brand'}`}>
             <Zap size={11} />
             当前积分余额
           </p>

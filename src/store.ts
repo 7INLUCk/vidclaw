@@ -5,7 +5,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'login-loading' | 'clarification' | 'kling-confirm';
+  type?: 'text' | 'result' | 'error' | 'ai-rewrite' | 'download' | 'guide-button' | 'mode-select' | 'batch-confirm' | 'progress' | 'qr-code' | 'login-error' | 'login-loading' | 'clarification' | 'kling-confirm' | 'skill-confirm' | 'submitted-summary';
   data?: any;
 }
 
@@ -98,6 +98,9 @@ export interface TaskRecord {
   status: 'pending' | 'uploading' | 'queued' | 'generating' | 'completed' | 'failed' | 'downloaded';
   progress?: number;
   queuePosition?: number;
+  queueLength?: number;
+  nextPollAt?: number;
+  statusMessage?: string;
   estimatedMinutes?: number;
   taskId?: string;
   submitId?: string;
@@ -133,6 +136,7 @@ export interface Skill {
   duration: number;
   aspectRatio: string;
   tasks: SkillTask[];
+  materialSlots?: Array<{ type: 'image' | 'video' | 'audio' }>;
   createdAt: number;
   updatedAt: number;
   usedCount: number;
@@ -156,6 +160,30 @@ export interface HistoryItem {
   localPath?: string;
   createdAt: number;
   status: 'completed' | 'downloaded' | 'deleted';
+}
+
+// ===== 批量任务历史（已完成的批次）=====
+export interface BatchHistoryTask {
+  index: number;
+  prompt: string;
+  status: 'completed' | 'downloaded' | 'failed';
+  outputFile?: string;
+  error?: string;
+}
+
+export interface BatchHistoryRecord {
+  id: string;
+  name: string;
+  description: string;
+  model: string;
+  duration: number;
+  aspectRatio: string;
+  sharedMaterials: Array<{ path: string; type: 'image' | 'video' | 'audio' }>;
+  totalTasks: number;
+  completedTasks: number;
+  tasks: BatchHistoryTask[];
+  createdAt: number;
+  completedAt: number;
 }
 
 // ===== 素材库 =====
@@ -239,7 +267,7 @@ interface AppState {
   settingsLoaded: boolean;
 
   // UI 状态
-  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription';
+  activePanel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription' | 'works';
 
   // 发送模式 & 批量任务状态
   sendMode: SendMode;
@@ -253,6 +281,8 @@ interface AppState {
 
   // 作品历史
   history: HistoryItem[];
+  // 批量任务历史
+  batchHistory: BatchHistoryRecord[];
   // 素材库
   materials: SavedMaterial[];
   // 技能
@@ -286,7 +316,7 @@ interface AppState {
   setSubmitting: (submitting: boolean) => void;
   setStatusText: (text: string) => void;
   setSettings: (settings: Partial<Settings>) => void;
-  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription') => void;
+  setActivePanel: (panel: 'chat' | 'queue' | 'settings' | 'history' | 'skills' | 'subscription' | 'works') => void;
   // 发送模式 & 批量任务 Actions
   setSendMode: (mode: SendMode) => void;
   setTaskMode: (mode: TaskMode) => void;
@@ -303,6 +333,9 @@ interface AppState {
   // 作品历史 Actions
   addHistory: (item: HistoryItem) => void;
   removeHistory: (id: string) => void;
+  // 批量任务历史 Actions
+  addBatchHistory: (record: BatchHistoryRecord) => void;
+  removeBatchHistory: (id: string) => void;
   // 素材库 Actions
   addMaterial: (item: SavedMaterial) => void;
   removeMaterial: (id: string) => void;
@@ -355,6 +388,12 @@ export const useStore = create<AppState>((set) => ({
   history: (() => {
     try {
       const saved = localStorage.getItem('vidclaw_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  })(),
+  batchHistory: (() => {
+    try {
+      const saved = localStorage.getItem('vidclaw_batch_history');
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   })(),
@@ -432,6 +471,16 @@ export const useStore = create<AppState>((set) => ({
     const history = s.history.filter(h => h.id !== id);
     try { localStorage.setItem('vidclaw_history', JSON.stringify(history)); } catch {}
     return { history };
+  }),
+  addBatchHistory: (record) => set((s) => {
+    const batchHistory = [record, ...s.batchHistory].slice(0, 100);
+    try { localStorage.setItem('vidclaw_batch_history', JSON.stringify(batchHistory)); } catch {}
+    return { batchHistory };
+  }),
+  removeBatchHistory: (id) => set((s) => {
+    const batchHistory = s.batchHistory.filter(b => b.id !== id);
+    try { localStorage.setItem('vidclaw_batch_history', JSON.stringify(batchHistory)); } catch {}
+    return { batchHistory };
   }),
   // 素材库 Actions
   addMaterial: (item) => set((s) => {

@@ -13,6 +13,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
+const { slugify } = require('../videoName');
 
 // 批量任务状态
 const BatchTaskStatus = {
@@ -374,8 +375,7 @@ class BatchTaskManager {
   async _downloadTask(task) {
     try {
       const batchDir = this.batchMetadata?.downloadDir || this.downloadDir;
-      const fileName = this._generateFileName(task);
-      
+
       // CLI 下载到批次目录
       const result = await this._callCli([
         'query_result',
@@ -385,15 +385,40 @@ class BatchTaskManager {
 
       if (result.success) {
         const data = this._parseJson(result.stdout);
-        // CLI 可能重命名文件，记录实际路径
-        const actualPath = data?.download_path || path.join(batchDir, fileName);
-        
+        let actualPath = data?.download_path || '';
+
+        // CLI 未返回路径时，扫描目录找最新视频（仅考虑任务启动后写入的文件）
+        if (!actualPath || !fs.existsSync(actualPath)) {
+          const cutoff = (task.startedAt ?? Date.now()) - 5_000; // 5s 容错
+          try {
+            const files = fs.readdirSync(batchDir)
+              .filter(f => /\.(mp4|mov|webm)$/i.test(f))
+              .map(f => ({ name: f, mtime: fs.statSync(path.join(batchDir, f)).mtimeMs }))
+              .filter(f => f.mtime >= cutoff)
+              .sort((a, b) => b.mtime - a.mtime);
+            if (files.length > 0) actualPath = path.join(batchDir, files[0].name);
+          } catch {}
+        }
+
+        // 重命名为 "序号_提示词.mp4"
+        const desiredName = this._generateFileName(task);
+        const desiredPath = path.join(batchDir, desiredName);
+        if (actualPath && actualPath !== desiredPath) {
+          try {
+            fs.renameSync(actualPath, desiredPath);
+            actualPath = desiredPath;
+          } catch (e) {
+            // ENOENT: source already gone; keep actualPath as-is
+            if (e.code !== 'ENOENT') console.warn(`[批量任务] 重命名失败: ${e.message}`);
+          }
+        }
+
         task.status = BatchTaskStatus.DOWNLOADED;
-        task.outputFile = actualPath;
+        task.outputFile = actualPath || desiredPath;
         this._persistTasks();
         this._notifyTaskUpdate(task);
 
-        console.log(`[批量任务] 已下载: ${actualPath}`);
+        console.log(`[批量任务] 已下载: ${task.outputFile}`);
       } else {
         task.status = BatchTaskStatus.COMPLETED; // 下载失败但任务完成
         task.error = '下载失败: ' + result.error;
@@ -408,17 +433,13 @@ class BatchTaskManager {
   }
 
   /**
-   * 生成文件名
+   * 生成文件名：序号_提示词.mp4
+   * 示例：01_榴莲完全变成金色跳舞完整版.mp4
    */
   _generateFileName(task) {
     const index = String(task.index).padStart(2, '0');
-    const testPoint = (task.reason || '测试')
-      .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '')
-      .slice(0, 20);
-    const materialDesc = task.materials?.length > 0
-      ? `${task.materials.length}素材`
-      : '无素材';
-    return `${index}_${testPoint}_${materialDesc}.mp4`;
+    const promptSlug = slugify(task.prompt || '未命名', 30);
+    return `${index}_${promptSlug}.mp4`;
   }
 
   /**
