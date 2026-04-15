@@ -138,12 +138,12 @@ function BatchConfirmCard({
     { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '速度快' },
     { value: 'seedance2.0',     label: 'Seedance 2.0',      desc: '质量高' },
   ];
-  const DURATION_OPTIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  const DURATION_OPTIONS = isKling ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   const RATIO_OPTIONS = isKling ? ['9:16', '16:9', '1:1'] : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === sharedModel)?.label || 'Seedance 2.0 Fast';
 
   const [showParamEditor, setShowParamEditor] = useState(false);
-  const { credits } = useStore();
+  const { credits, jimengBalance } = useStore();
   const klingTotalCost = isKling ? batchTasks.reduce((sum, t) => sum + (t.duration * 10), 0) : 0;
   const canAfford = !isKling || credits.balance >= klingTotalCost;
 
@@ -333,18 +333,27 @@ function BatchConfirmCard({
           </button>
         </div>
 
-        {/* 可灵 O1 积分消耗（仅可灵模式显示）*/}
-        {isKling && (
-          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-            <div className="flex items-center gap-1.5">
-              <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-              <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-                共 {batchTasks.length} 条 · 合计消耗 {klingTotalCost} 积分
+        {/* 积分余额行 */}
+        {isKling ? (
+          <div className={`px-3 py-2 rounded-lg space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+                <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                  共 {batchTasks.length} 条 · 合计消耗 {klingTotalCost} 积分
+                </span>
+              </div>
+              <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+                VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
               </span>
             </div>
-            <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-              余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
-            </span>
+            <div className="flex justify-end">
+              <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end px-3 py-2 rounded-lg bg-surface-3">
+            <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
           </div>
         )}
         {/* Action buttons */}
@@ -1131,7 +1140,7 @@ function ConfirmCard({
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState<string>(task.prompt || '');
   const setPreviewUrl = useStore(s => s.setPreviewUrl);
-  const { credits } = useStore();
+  const { credits, jimengBalance } = useStore();
   const isKling = selectedModel === 'kling-o1';
   const klingCost = isKling ? (selectedDuration ?? 5) * 10 : 0;
   const canAfford = !isKling || credits.balance >= klingCost;
@@ -1143,7 +1152,7 @@ function ConfirmCard({
   ];
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === selectedModel)?.label ?? 'Seedance 2.0 Fast';
 
-  const durations = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  const durations = isKling ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   const ratios = isKling ? ['9:16', '16:9', '1:1'] : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
 
   // 所有素材合并（保持分组顺序：图片 → 视频 → 音频）
@@ -1318,18 +1327,27 @@ function ConfirmCard({
             <p className="text-[10px] text-text-muted mb-3">📎 素材将随任务一起提交给即梦 CLI</p>
           )}
 
-          {/* 可灵 O1 积分消耗（仅可灵模式显示）*/}
-          {isKling && (
-            <div className={`flex items-center justify-between px-3 py-2 rounded-lg mb-3 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-              <div className="flex items-center gap-1.5">
-                <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-                <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-                  消耗 {klingCost} 积分
+          {/* 积分余额行 */}
+          {isKling ? (
+            <div className={`px-3 py-2 rounded-lg mb-3 space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+                  <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                    消耗 {klingCost} 积分
+                  </span>
+                </div>
+                <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+                  VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
                 </span>
               </div>
-              <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-                余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
-              </span>
+              <div className="flex justify-end">
+                <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end px-3 py-2 rounded-lg mb-3 bg-surface-3">
+              <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
             </div>
           )}
           <div className="flex items-center gap-2 flex-wrap">
@@ -2476,6 +2494,7 @@ export function ChatPanel() {
           content: `🚀 可灵批量任务已启动！共 ${liveTasks.length} 个任务，消耗 ${totalCost} 积分。可在作品页查看进度。`,
           timestamp: new Date(),
         });
+        setBatchTasks([]);  // 清空 batchTasks，防止 BatchQueueCard 显示"待提交"
         setSubmitting(false);
         setStatusText('');
         setGuidedStep('logged-in-ready');
@@ -4099,7 +4118,7 @@ function KlingConfirmCard({ data, onConfirm, onCancel, onSaveAsSkill }: {
   onCancel: () => void;
   onSaveAsSkill?: () => void;
 }) {
-  const { credits } = useStore();
+  const { credits, jimengBalance } = useStore();
   const canAfford = credits.balance >= data.cost;
 
   return (
@@ -4128,17 +4147,22 @@ function KlingConfirmCard({ data, onConfirm, onCancel, onSaveAsSkill }: {
             {data.prompt}
           </p>
         )}
-        {/* Credit cost */}
-        <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
-          <div className="flex items-center gap-1.5">
-            <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
-            <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
-              消耗 {data.cost} 积分
+        {/* Credit cost + dual balance */}
+        <div className={`px-3 py-2 rounded-lg space-y-1 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+              <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                消耗 {data.cost} 积分
+              </span>
+            </div>
+            <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+              VidClaw 余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
             </span>
           </div>
-          <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
-            余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
-          </span>
+          <div className="flex justify-end">
+            <span className="text-[10px] text-text-muted">即梦余额 {jimengBalance.toLocaleString()} 积分</span>
+          </div>
         </div>
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-0.5">

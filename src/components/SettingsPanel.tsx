@@ -33,7 +33,7 @@ export function SettingsPanel() {
         const d = (result as any).data as CreditDetail;
         setCreditDetail(d);
         setCreditUpdatedAt(new Date());
-        useStore.getState().syncBalance(d.totalCredit);
+        useStore.getState().setJimengBalance(d.totalCredit);
       } else {
         setCreditError(result.error ?? '查询失败');
       }

@@ -201,6 +201,15 @@ export default function App() {
         console.error('[Init] getBatchStatus failed:', err);
       }
 
+      // 拉取即梦账号余额缓存（不影响 VidClaw 积分）
+      window.api.checkCredits().then((result: any) => {
+        if (result.success && result.data?.totalCredit != null) {
+          useStore.getState().setJimengBalance(result.data.totalCredit);
+        } else if (result.success && typeof result.credits === 'number') {
+          useStore.getState().setJimengBalance(result.credits);
+        }
+      }).catch(() => { /* silent fail — 启动时积分拉取失败不阻塞 */ });
+
       setAppState('ready');
     } catch (err) {
       console.error('初始化失败:', err);

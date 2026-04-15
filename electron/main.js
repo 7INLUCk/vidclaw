@@ -934,8 +934,23 @@ function registerIpcHandlers() {
     return { success: true, isInternal, email: normalized };
   });
 
-  // ── 可灵 O1 图生视频（Coze API）──────────────────────────────────
+  // ── 可灵 O1 图生视频（Coze API）── 并发队列（最多 5 并发）──────────
   const { klingGenerate } = require('./coze');
+  const klingQueue = [];          // { taskFn, submitId }[]
+  let klingRunning = 0;
+  const KLING_MAX_CONCURRENT = 5;
+
+  function drainKlingQueue() {
+    while (klingRunning < KLING_MAX_CONCURRENT && klingQueue.length > 0) {
+      klingRunning++;
+      const { taskFn } = klingQueue.shift();
+      taskFn().finally(() => {
+        klingRunning--;
+        drainKlingQueue();
+      });
+    }
+  }
+
   ipcMain.handle('kling:generate', (_event, { imagePaths, prompt, duration, aspectRatio, submitId: clientSubmitId }) => {
     const submitId = clientSubmitId || 'kling_' + Date.now();
     const downloadDir = path.join(settings.downloadDir || path.join(require('os').homedir(), 'Downloads', '即梦'), '可灵O1');
@@ -947,8 +962,7 @@ function registerIpcHandlers() {
       });
     }
 
-    // Fire-and-forget: start generation in background, return submitId immediately
-    setImmediate(async () => {
+    async function runThisTask() {
       console.log('[Kling] 开始生成，图片数:', imagePaths?.length, '时长:', duration, '比例:', aspectRatio);
       sendKlingProgress('upload', `上传图片 (共 ${imagePaths.length} 张)...`, 5);
       let uploadedCount = 0;
@@ -988,7 +1002,24 @@ function registerIpcHandlers() {
           data: { submitId, error: err.message },
         });
       }
-    });
+    }
+
+    if (klingRunning < KLING_MAX_CONCURRENT) {
+      // 有空位，立即执行
+      klingRunning++;
+      setImmediate(() => {
+        runThisTask().finally(() => {
+          klingRunning--;
+          drainKlingQueue();
+        });
+      });
+    } else {
+      // 队列已满，进入等待队列并通知渲染进程
+      const queuePosition = klingQueue.length + 1;
+      klingQueue.push({ taskFn: runThisTask, submitId });
+      sendKlingProgress('queued', `排队中 第${queuePosition}位`, 0);
+      console.log(`[Kling] 任务 ${submitId} 进入队列，当前位置: ${queuePosition}`);
+    }
 
     // Return immediately so renderer can unlock input right away
     return { success: true, submitId };

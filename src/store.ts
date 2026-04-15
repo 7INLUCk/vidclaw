@@ -300,6 +300,8 @@ interface AppState {
   deductCredits: (amount: number, description: string) => boolean;
   addCredits: (amount: number, description: string) => void;
   syncBalance: (balance: number) => void;
+  jimengBalance: number;
+  setJimengBalance: (balance: number) => void;
 
   // 视频预览
   previewUrl: string | null;
@@ -435,6 +437,7 @@ export const useStore = create<AppState>((set) => ({
       return saved ? JSON.parse(saved) : { balance: 0, transactions: [] };
     } catch { return { balance: 0, transactions: [] }; }
   })(),
+  jimengBalance: 0,
   // 用量统计
   usage: (() => {
     try {
@@ -530,6 +533,7 @@ export const useStore = create<AppState>((set) => ({
     try { localStorage.setItem('vidclaw_credits', JSON.stringify(credits)); } catch {}
     return { credits };
   }),
+  setJimengBalance: (jimengBalance) => set({ jimengBalance }),
   deductCredits: (amount, description) => {
     const state = useStore.getState();
     if (state.credits.balance < amount) return false;
