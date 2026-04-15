@@ -156,6 +156,19 @@ export default function App() {
       await initLocalFileServer();
       const savedSettings = await window.api.getSettings();
       if (savedSettings) setSettings(savedSettings);
+
+      // Restore in-progress batch tasks from backend
+      try {
+        const batchStatus = await window.api.getBatchStatus();
+        const restoredTasks = batchStatus.success ? (batchStatus.tasks as import('./store').BatchTaskItem[] | undefined) : undefined;
+        if (restoredTasks && restoredTasks.length > 0) {
+          const { setBatchTasks, setBatchInfo, taskMode, setTaskMode } = useStore.getState();
+          setBatchTasks(restoredTasks);
+          if (batchStatus.batch) setBatchInfo(batchStatus.batch);
+          if (taskMode !== 'batch') setTaskMode('batch');
+        }
+      } catch {}
+
       setAppState('ready');
     } catch (err) {
       console.error('初始化失败:', err);

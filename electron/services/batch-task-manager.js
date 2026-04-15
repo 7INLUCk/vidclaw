@@ -570,19 +570,29 @@ class BatchTaskManager {
   }
 
   /**
-   * 加载持久化任务
+   * 加载持久化任务，并对仍在生成中的任务重启轮询
    */
   _loadPersistedTasks() {
     const persistPath = path.join(this.downloadDir, '_batch_tasks.json');
-    if (fs.existsSync(persistPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(persistPath, 'utf8'));
-        this.batchMetadata = data.batch;
-        this.tasks = data.tasks || [];
-        console.log(`[批量任务] 恢复 ${this.tasks.length} 个任务`);
-      } catch (e) {
-        console.error('[批量任务] 恢复任务失败:', e.message);
+    if (!fs.existsSync(persistPath)) return;
+    try {
+      const data = JSON.parse(fs.readFileSync(persistPath, 'utf8'));
+      this.batchMetadata = data.batch;
+      this.tasks = data.tasks || [];
+      console.log(`[批量任务] 恢复 ${this.tasks.length} 个任务`);
+
+      // 对仍在生成中的任务（有 submitId）重启轮询和监控
+      const activeTasks = this.tasks.filter(
+        t => (t.status === BatchTaskStatus.GENERATING || t.status === BatchTaskStatus.SUBMITTED) && t.submitId
+      );
+      if (activeTasks.length > 0) {
+        console.log(`[批量任务] 重启 ${activeTasks.length} 个任务的轮询`);
+        this.running = true;
+        activeTasks.forEach(t => this._startTaskPolling(t));
+        this._startMonitor();
       }
+    } catch (e) {
+      console.error('[批量任务] 恢复任务失败:', e.message);
     }
   }
 }
