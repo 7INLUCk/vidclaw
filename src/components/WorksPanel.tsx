@@ -533,11 +533,46 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
   const playUrl = task.localPath ? toPlayable(task.localPath) : task.resultUrl ? toPlayable(task.resultUrl) : '';
   const canManualDownload = Boolean(task.submitId || isRemoteHttpUrl(task.resultUrl));
 
+  const [deleteCountdown, setDeleteCountdown] = useState(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     if (highlighted) {
       cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [highlighted]);
+
+  useEffect(() => {
+    if (deleteCountdown <= 0) return;
+    if (countdownRef.current) return;
+    countdownRef.current = setInterval(() => {
+      setDeleteCountdown(c => {
+        if (c <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [deleteCountdown]);
+
+  const handleDeleteClick = useCallback(() => {
+    if (deleteCountdown > 0) {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = null;
+      setDeleteCountdown(0);
+      onDelete(task.id);
+    } else {
+      setDeleteCountdown(3);
+    }
+  }, [deleteCountdown, onDelete, task.id]);
 
   const handleDownload = useCallback(() => {
     if (openablePath) {
@@ -552,14 +587,15 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
   return (
     <div
       ref={cardRef}
-      className={`group flex items-center gap-3 bg-surface-1 border rounded-md p-3 transition-colors ${
+      className={`group flex items-center gap-3 bg-surface-1 border rounded-xl p-3
+        active:scale-[0.97] transition-all duration-150 ${
         highlighted
           ? 'border-brand shadow-[0_0_0_1px_rgba(54,118,255,0.28)]'
-          : 'border-border-subtle hover:border-border'
+          : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.16)]'
       }`}
     >
       {/* Thumbnail */}
-      <div className="w-20 h-14 rounded-md overflow-hidden bg-surface-2 flex-shrink-0 relative">
+      <div className="w-20 h-14 rounded-lg overflow-hidden bg-surface-2 flex-shrink-0 relative">
         {task.thumbnailUrl
           ? <img src={toPlayable(task.thumbnailUrl)} alt="" className="w-full h-full object-cover" loading="lazy" />
           : !isFailed && playUrl
@@ -587,24 +623,36 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">
         {!isFailed && playUrl && (
-          <button onClick={() => onPreview(playUrl)} className="p-1.5 rounded bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
+          <button onClick={() => onPreview(playUrl)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
             <Play size={12} />
           </button>
         )}
         {!isFailed && (openablePath || canManualDownload) && (
-          <button onClick={handleDownload} className="p-1.5 rounded bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
+          <button onClick={handleDownload} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
             <Download size={12} />
           </button>
         )}
         {isFailed && (
-          <button onClick={() => onRetry(task.id)} className="p-1.5 rounded bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
+          <button onClick={() => onRetry(task.id)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
             <RefreshCw size={12} />
           </button>
         )}
-        <button onClick={() => onDelete(task.id)} className="p-1.5 rounded bg-surface-3 hover:bg-error hover:text-white text-text-muted transition-colors">
-          <Trash2 size={12} />
+        {/* Delete — two-step confirm */}
+        <button
+          onClick={handleDeleteClick}
+          className={`p-1.5 rounded-lg transition-colors ${
+            deleteCountdown > 0
+              ? 'bg-error/70 text-white'
+              : 'bg-surface-3 hover:bg-error hover:text-white text-text-muted'
+          }`}
+          title={deleteCountdown > 0 ? `再次点击确认 (${deleteCountdown}s)` : '删除'}
+        >
+          {deleteCountdown > 0
+            ? <span className="text-[11px] font-mono w-3 text-center block">{deleteCountdown}</span>
+            : <Trash2 size={12} />
+          }
         </button>
       </div>
     </div>
