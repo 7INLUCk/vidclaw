@@ -345,19 +345,24 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
 
   // Reset delete confirm when countdown reaches 0
   useEffect(() => {
-    if (deleteCountdown > 0) {
-      countdownRef.current = setInterval(() => {
-        setDeleteCountdown(c => {
-          if (c <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            return 0;
-          }
-          return c - 1;
-        });
-      }, 1000);
-    }
+    if (deleteCountdown <= 0) return;
+    // Only start a new interval if none is running
+    if (countdownRef.current) return;
+    countdownRef.current = setInterval(() => {
+      setDeleteCountdown(c => {
+        if (c <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
     return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
     };
   }, [deleteCountdown]);
 
@@ -480,10 +485,10 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
               {/* Delete — two-step confirm */}
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
-                className={`p-1.5 rounded-lg transition-colors opacity-30 group-hover:opacity-100 ${
+                className={`p-1.5 rounded-lg transition-colors ${
                   deleteCountdown > 0
                     ? 'bg-error/70 text-white opacity-100'
-                    : 'bg-black/50 text-white/30 hover:text-error'
+                    : 'bg-black/50 text-white/30 hover:text-error opacity-30 group-hover:opacity-100'
                 }`}
                 title={deleteCountdown > 0 ? `再次点击确认删除 (${deleteCountdown}s)` : '删除'}
               >
