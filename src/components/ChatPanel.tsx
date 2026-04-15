@@ -2168,6 +2168,51 @@ export function ChatPanel() {
 
     try {
 
+      // 可灵 O1 执行路径
+      if (selectedModel === 'kling-o1') {
+        const imagePaths = filesToSubmit.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+        const cost = selectedDuration * 10;
+        if (credits.balance < cost) {
+          addMessage({
+            id: Date.now().toString() + '_credits_low',
+            role: 'assistant',
+            content: `❌ 积分不足。需要 ${cost} 积分，当前余额 ${credits.balance}`,
+            timestamp: new Date(),
+            type: 'error',
+          });
+          setPendingTask(null);
+          setSubmitting(false);
+          setStatusText('');
+          setGuidedStep('logged-in-ready');
+          return;
+        }
+        deductCredits(cost, `可灵 O1 · ${selectedDuration}s 视频`);
+        const submitId = 'kling_' + Date.now();
+        addTask({
+          id: 'task_' + Date.now(),
+          submitId,
+          prompt: effectiveTask.prompt,
+          type: 'video',
+          status: 'generating',
+          progress: 0,
+          statusMessage: '准备中...',
+          model: 'kling-o1',
+          duration: selectedDuration,
+          materials: imagePaths.map(p => ({ path: p, type: 'image' as const })),
+          createdAt: Date.now(),
+          retryCount: 0,
+        });
+        void window.api.klingGenerate({ imagePaths, prompt: effectiveTask.prompt, duration: selectedDuration, aspectRatio: selectedRatio, submitId });
+        setSelectedFiles([]);
+        setInput('');
+        showQueueToast('✅ 已加入队列，前往排队区查看进度');
+        setPendingTask(null);
+        setSubmitting(false);
+        setStatusText('');
+        setGuidedStep('logged-in-ready');
+        return;
+      }
+
       if (hasFiles) {
         const materials: TaskMaterial[] = filesToSubmit.map(f => ({
           path: f,
