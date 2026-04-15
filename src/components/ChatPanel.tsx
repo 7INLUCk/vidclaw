@@ -141,6 +141,10 @@ function BatchConfirmCard({
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === sharedModel)?.label || 'Seedance 2.0 Fast';
 
   const [showParamEditor, setShowParamEditor] = useState(false);
+  const { credits } = useStore();
+  const isKling = sharedModel === 'kling-o1';
+  const klingTotalCost = isKling ? batchTasks.reduce((sum, t) => sum + (t.duration * 10), 0) : 0;
+  const canAfford = !isKling || credits.balance >= klingTotalCost;
 
   const updateSharedParam = (key: 'model' | 'duration' | 'aspectRatio', value: any) => {
     setBatchTasks(batchTasks.map(t => ({ ...t, [key]: value })));
@@ -321,11 +325,25 @@ function BatchConfirmCard({
           </button>
         </div>
 
+        {/* 可灵 O1 积分消耗（仅可灵模式显示）*/}
+        {isKling && (
+          <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+            <div className="flex items-center gap-1.5">
+              <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+              <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                共 {batchTasks.length} 条 · 合计消耗 {klingTotalCost} 积分
+              </span>
+            </div>
+            <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+              余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+            </span>
+          </div>
+        )}
         {/* Action buttons */}
         <div className="flex items-center gap-2 pt-1 flex-wrap">
           <button
             onClick={onConfirm}
-            disabled={batchTasks.length === 0 || hasEmptyPrompts}
+            disabled={batchTasks.length === 0 || hasEmptyPrompts || !canAfford}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-md transition-all hover:-translate-y-0.5 disabled:hover:translate-y-0"
           >
             <CheckCircle size={14} />
@@ -1105,6 +1123,10 @@ function ConfirmCard({
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState<string>(task.prompt || '');
   const setPreviewUrl = useStore(s => s.setPreviewUrl);
+  const { credits } = useStore();
+  const isKling = selectedModel === 'kling-o1';
+  const klingCost = isKling ? (selectedDuration ?? 5) * 10 : 0;
+  const canAfford = !isKling || credits.balance >= klingCost;
 
   const MODEL_OPTIONS = [
     { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '速度快，适合快速预览' },
@@ -1281,10 +1303,25 @@ function ConfirmCard({
             <p className="text-[10px] text-text-muted mb-3">📎 素材将随任务一起提交给即梦 CLI</p>
           )}
 
+          {/* 可灵 O1 积分消耗（仅可灵模式显示）*/}
+          {isKling && (
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg mb-3 ${canAfford ? 'bg-brand/10 border border-brand/20' : 'bg-error/10 border border-error/20'}`}>
+              <div className="flex items-center gap-1.5">
+                <Zap size={11} className={canAfford ? 'text-brand' : 'text-error'} />
+                <span className={`text-[11px] font-medium ${canAfford ? 'text-brand' : 'text-error'}`}>
+                  消耗 {klingCost} 积分
+                </span>
+              </div>
+              <span className={`text-[10px] ${canAfford ? 'text-text-muted' : 'text-error'}`}>
+                余额 {credits.balance.toLocaleString()} {!canAfford && '· 不足'}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onConfirm(isEditingPrompt ? editedPrompt : undefined)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 bg-brand hover:bg-brand/90 text-white hover:-translate-y-0.5"
+              disabled={!canAfford}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-150 bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed text-white hover:-translate-y-0.5"
             >
               <CheckCircle size={14} />
               确认提交
