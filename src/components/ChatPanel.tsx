@@ -1750,13 +1750,22 @@ export function ChatPanel() {
       return;
     }
 
-    // Kling O1 mode: image-to-video via Coze API
+    // Kling O1: 必须上传图片，校验失败直接提示
     if (selectedModel === 'kling-o1') {
-      handleKlingSend();
-      return;
+      const imageFiles = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      if (imageFiles.length === 0) {
+        addMessage({
+          id: Date.now().toString() + '_kling_noimgs',
+          role: 'assistant',
+          content: '⚠️ 可灵 O1 是图生视频模型，请先上传至少一张图片（支持 jpg/png/webp）',
+          timestamp: new Date(),
+          type: 'error',
+        });
+        return;
+      }
     }
 
-    if (!input.trim()) return;
+    if (!input.trim() && selectedModel !== 'kling-o1') return;
 
     if (sendMode === 'ai-batch') {
       await handleBatchSend();
