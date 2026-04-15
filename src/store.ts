@@ -376,11 +376,17 @@ export const useStore = create<AppState>((set) => ({
   taskMode: 'single',
   batchTasks: [],
   batchInfo: null,
-  // 任务管理初始状态
+  // 任务管理初始状态（重启时把孤儿任务标记为失败）
   tasks: (() => {
     try {
       const saved = localStorage.getItem('vidclaw_tasks');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const ACTIVE = new Set(['pending', 'queued', 'generating', 'uploading']);
+      return (JSON.parse(saved) as TaskRecord[]).map(t =>
+        ACTIVE.has(t.status)
+          ? { ...t, status: 'failed' as const, error: '应用重启，任务中断，请重试' }
+          : t
+      );
     } catch { return []; }
   })(),
   highlightedTaskId: null,
