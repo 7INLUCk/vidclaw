@@ -2013,6 +2013,31 @@ export function ChatPanel() {
   // ===== 直接发送（跳过 AI 改写）=====
   async function handleDirectSend() {
     const prompt = input.trim();
+
+    // 专业模式 + 可灵：弹出确认卡（需积分确认），不直接提交
+    if (selectedModel === 'kling-o1') {
+      const imageFiles = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      const cost = selectedDuration * 10;
+      const userMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: prompt || '（未输入提示词）',
+        timestamp: new Date(),
+        data: { materials: imageFiles.map((f, i) => ({ type: 'image', name: `图片${i + 1}`, path: f })) },
+      };
+      addMessage(userMsg);
+      addMessage({
+        id: Date.now().toString() + '_kling_confirm',
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        type: 'kling-confirm',
+        data: { prompt, imagePaths: imageFiles, duration: selectedDuration, aspectRatio: selectedRatio, cost },
+      });
+      setInput('');
+      return;
+    }
+
     const filesToSubmit = [...selectedFiles];
     const hasFiles = filesToSubmit.length > 0 && useStructuredFlow;
 
