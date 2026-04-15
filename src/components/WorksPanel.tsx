@@ -170,7 +170,19 @@ function BatchQueueSection() {
             const isFailed = t.status === 'failed';
             const isPending = t.status === 'pending';
             const isRunning = ['submitted', 'generating'].includes(t.status);
-            const hasQueue = isRunning && t.queuePosition != null && t.queuePosition >= 0;
+            // queue_status from Dreamina: "Queuing" = waiting in global queue, "Generating" = actively generating
+            const isQueuing   = isRunning && t.queueStatus === 'Queuing';
+            const isGenerating = isRunning && t.queueStatus === 'Generating';
+
+            let statusLabel: string;
+            let statusColor: string;
+            if (isFailed)       { statusLabel = '失败';   statusColor = 'text-error'; }
+            else if (isDone)    { statusLabel = '完成';   statusColor = 'text-success'; }
+            else if (isPending) { statusLabel = '待提交'; statusColor = 'text-text-muted'; }
+            else if (isQueuing) { statusLabel = `排队第${t.queuePosition! + 1}位`; statusColor = 'text-warning'; }
+            else if (isGenerating) { statusLabel = '生成中'; statusColor = 'text-brand'; }
+            else                { statusLabel = '提交中'; statusColor = 'text-brand'; }
+
             return (
               <div key={t.id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] ${
                 isFailed ? 'bg-error/8' : isDone ? 'bg-success/8' : 'bg-surface-3/50'
@@ -182,10 +194,8 @@ function BatchQueueSection() {
                 {isRunning && <Loader2 size={10} className="animate-spin text-brand flex-shrink-0" />}
                 {isDone && <CheckCircle size={10} className="text-success flex-shrink-0" />}
                 {isFailed && <AlertTriangle size={10} className="text-error flex-shrink-0" />}
-                <span className={`text-[10px] font-medium flex-shrink-0 ${
-                  isFailed ? 'text-error' : isDone ? 'text-success' : hasQueue ? 'text-warning' : isPending ? 'text-text-muted' : 'text-brand'
-                }`}>
-                  {isFailed ? '失败' : isDone ? '完成' : hasQueue ? `第${t.queuePosition! + 1}位` : isPending ? '待提交' : '执行中'}
+                <span className={`text-[10px] font-medium flex-shrink-0 ${statusColor}`}>
+                  {statusLabel}
                 </span>
               </div>
             );

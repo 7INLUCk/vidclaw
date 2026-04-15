@@ -2926,7 +2926,7 @@ export function ChatPanel() {
         const batchTasks = useStore.getState().batchTasks;
         const updated = batchTasks.map((bt, idx) =>
           idx === task.index - 1
-            ? { ...bt, status: task.status, outputFile: task.outputFile ?? bt.outputFile, error: task.error ?? bt.error, queuePosition: task.queuePosition ?? bt.queuePosition }
+            ? { ...bt, status: task.status, outputFile: task.outputFile ?? bt.outputFile, error: task.error ?? bt.error, queuePosition: task.queuePosition ?? bt.queuePosition, queueStatus: task.queueStatus ?? bt.queueStatus, queueLength: task.queueLength ?? bt.queueLength }
             : bt
         );
         useStore.getState().setBatchTasks(updated);

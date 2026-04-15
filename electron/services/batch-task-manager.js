@@ -382,9 +382,11 @@ class BatchTaskManager {
 
         const status = data.gen_status || data.status || 'unknown';
         const queueInfo = data.queue_info || {};
-        const queueIdx = queueInfo.queue_idx ?? -1;
+        const queueIdx    = queueInfo.queue_idx    ?? -1;
+        const queueStatus = queueInfo.queue_status || '';   // "Generating" | "Queuing"
+        const queueLength = queueInfo.queue_length ?? 0;
 
-        console.log(`[批量任务轮询] task ${task.index} gen_status=${status} queue_idx=${queueIdx}`);
+        console.log(`[批量任务轮询] task ${task.index} gen_status=${status} queue_status=${queueStatus} queue_idx=${queueIdx}`);
 
         if (status === 'success') {
           this.pollingTimers.delete(task.submitId);
@@ -398,13 +400,20 @@ class BatchTaskManager {
           this._notifyTaskUpdate(task);
           await this._submitNextTask();
         } else {
-          // 排队/生成中，更新队列位置并按节奏继续轮询
-          if (queueIdx >= 0 && task.queuePosition !== queueIdx) {
+          // 更新排队/生成状态
+          const changed =
+            task.queuePosition !== queueIdx ||
+            task.queueStatus    !== queueStatus ||
+            task.queueLength    !== queueLength;
+          if (changed) {
             task.queuePosition = queueIdx;
+            task.queueStatus   = queueStatus;
+            task.queueLength   = queueLength;
             this._persistTasks();
             this._notifyTaskUpdate(task);
           }
-          const nextInterval = queueIdx >= 0 ? POLL_QUEUED : POLL_FALLBACK;
+          // Queuing 态较慢，用 180s；Generating 或未知用 30s
+          const nextInterval = queueStatus === 'Queuing' ? POLL_QUEUED : POLL_FALLBACK;
           timeoutHandle = setTimeout(doPoll, nextInterval);
           this.pollingTimers.set(task.submitId, timeoutHandle);
         }

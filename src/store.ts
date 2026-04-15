@@ -41,6 +41,8 @@ export interface BatchTaskItem {
   model: string;
   status: 'pending' | 'submitted' | 'generating' | 'completed' | 'downloaded' | 'failed';
   queuePosition?: number;
+  queueStatus?: string;   // "Generating" | "Queuing" from Dreamina API
+  queueLength?: number;
   outputFile?: string;
   error?: string;
 }
