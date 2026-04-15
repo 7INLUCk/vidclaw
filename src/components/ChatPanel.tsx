@@ -127,22 +127,23 @@ function BatchConfirmCard({
   const setPreviewUrl = useStore(s => s.setPreviewUrl);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
 
+  // Shared params — derived from first task (must come before MODEL_OPTIONS for isKling check)
+  const sharedModel = batchTasks[0]?.model || 'seedance2.0fast';
+  const sharedDuration = batchTasks[0]?.duration || 5;
+  const sharedRatio = batchTasks[0]?.aspectRatio || '9:16';
+  const isKling = sharedModel === 'kling-o1';
+
   const MODEL_OPTIONS = [
+    { value: 'kling-o1',        label: 'Kling O1',          desc: '可灵图生视频' },
     { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '速度快' },
     { value: 'seedance2.0',     label: 'Seedance 2.0',      desc: '质量高' },
   ];
   const DURATION_OPTIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-  const RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
-
-  // Shared params — derived from first task
-  const sharedModel = batchTasks[0]?.model || 'seedance2.0fast';
-  const sharedDuration = batchTasks[0]?.duration || 5;
-  const sharedRatio = batchTasks[0]?.aspectRatio || '9:16';
+  const RATIO_OPTIONS = isKling ? ['9:16', '16:9', '1:1'] : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === sharedModel)?.label || 'Seedance 2.0 Fast';
 
   const [showParamEditor, setShowParamEditor] = useState(false);
   const { credits } = useStore();
-  const isKling = sharedModel === 'kling-o1';
   const klingTotalCost = isKling ? batchTasks.reduce((sum, t) => sum + (t.duration * 10), 0) : 0;
   const canAfford = !isKling || credits.balance >= klingTotalCost;
 
@@ -260,15 +261,22 @@ function BatchConfirmCard({
                 {/* 模型 */}
                 <div>
                   <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">模型</p>
-                  <div className="flex gap-2">
-                    {MODEL_OPTIONS.map(m => (
-                      <button key={m.value} onClick={() => updateSharedParam('model', m.value)}
-                        className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 text-left ${sharedModel === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
-                        <span className="font-medium block">{m.label}</span>
-                        <span className="text-[10px] opacity-70">{m.desc}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {isKling ? (
+                    <div className="px-3 py-1.5 bg-surface-2 rounded-md text-[11px] text-text-secondary">
+                      <span className="font-medium">Kling O1</span>
+                      <span className="ml-2 text-[10px] opacity-60">可灵图生视频</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      {MODEL_OPTIONS.filter(m => m.value !== 'kling-o1').map(m => (
+                        <button key={m.value} onClick={() => updateSharedParam('model', m.value)}
+                          className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 text-left ${sharedModel === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                          <span className="font-medium block">{m.label}</span>
+                          <span className="text-[10px] opacity-70">{m.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {/* 时长 */}
                 <div>
@@ -1129,14 +1137,14 @@ function ConfirmCard({
   const canAfford = !isKling || credits.balance >= klingCost;
 
   const MODEL_OPTIONS = [
+    { value: 'kling-o1',        label: 'Kling O1',          desc: '可灵图生视频' },
     { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '速度快，适合快速预览' },
     { value: 'seedance2.0',     label: 'Seedance 2.0',      desc: '质量高，推荐正式生产' },
   ];
-  const currentModelLabel = MODEL_OPTIONS.find(m => m.value === selectedModel)?.label
-    ?? (selectedModel === 'seedance2.0fast' || !selectedModel ? 'Seedance 2.0 Fast' : 'Seedance 2.0');
+  const currentModelLabel = MODEL_OPTIONS.find(m => m.value === selectedModel)?.label ?? 'Seedance 2.0 Fast';
 
   const durations = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-  const ratios = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
+  const ratios = isKling ? ['9:16', '16:9', '1:1'] : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
 
   // 所有素材合并（保持分组顺序：图片 → 视频 → 音频）
   const allMaterials = [
@@ -1261,15 +1269,22 @@ function ConfirmCard({
                 {/* 模型 */}
                 <div>
                   <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">模型</p>
-                  <div className="flex gap-2">
-                    {MODEL_OPTIONS.map(m => (
-                      <button key={m.value} onClick={() => onModelChange?.(m.value)}
-                        className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 text-left ${selectedModel === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
-                        <span className="font-medium block">{m.label}</span>
-                        <span className="text-[10px] opacity-70">{m.desc}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {isKling ? (
+                    <div className="px-3 py-1.5 bg-surface-2 rounded-md text-[11px] text-text-secondary">
+                      <span className="font-medium">Kling O1</span>
+                      <span className="ml-2 text-[10px] opacity-60">可灵图生视频</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      {MODEL_OPTIONS.filter(m => m.value !== 'kling-o1').map(m => (
+                        <button key={m.value} onClick={() => onModelChange?.(m.value)}
+                          className={`px-3 py-1.5 text-[11px] rounded-md transition-all flex-1 text-left ${selectedModel === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                          <span className="font-medium block">{m.label}</span>
+                          <span className="text-[10px] opacity-70">{m.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {/* 时长 */}
                 <div>

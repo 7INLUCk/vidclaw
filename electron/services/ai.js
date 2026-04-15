@@ -601,9 +601,10 @@ class AIService {
           expectedEffect: variation.description,
           // 模型固定用工具栏选择的，不让 AI 自行决定
           model: defaultModel,
-          // 时长/比例：AI 可以根据内容调整，否则沿用工具栏默认值
+          // 时长/比例：Kling 锁定用户工具栏选择的值（Seedance AI 可能返回不兼容比例）
+          // Seedance 允许 AI 按内容调整；Kling 仅支持 9:16 / 16:9 / 1:1，不允许覆盖
           duration: taskPrompt.duration || defaultDuration,
-          aspectRatio: taskPrompt.aspectRatio || defaultAspectRatio,
+          aspectRatio: defaultModel === 'kling-o1' ? defaultAspectRatio : (taskPrompt.aspectRatio || defaultAspectRatio),
           // 所有子任务共享参考素材
           materials: allMaterialsList,
         });
