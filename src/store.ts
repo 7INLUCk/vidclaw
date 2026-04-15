@@ -136,7 +136,7 @@ export interface Skill {
   duration: number;
   aspectRatio: string;
   tasks: SkillTask[];
-  materialSlots?: Array<{ type: 'image' | 'video' | 'audio' }>;
+  materialSlots?: Array<{ type: 'image' | 'video' | 'audio'; path?: string }>;
   createdAt: number;
   updatedAt: number;
   usedCount: number;

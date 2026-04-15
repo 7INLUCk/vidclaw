@@ -14,6 +14,8 @@ function timeAgo(ts: number): string {
   return `${days} 天前`;
 }
 
+type MaterialSlot = { type: 'image' | 'video' | 'audio'; path?: string };
+
 // ── Skill Editor Modal ──
 function SkillEditor({
   skill,
@@ -31,11 +33,16 @@ function SkillEditor({
   const [aspectRatio, setAspectRatio] = useState(skill.aspectRatio || '9:16');
   const [tasks, setTasks] = useState<SkillTask[]>(skill.tasks || [{ prompt: '' }]);
   const [expandedTasks, setExpandedTasks] = useState(false);
+  const [slots, setSlots] = useState<MaterialSlot[]>(skill.materialSlots || []);
 
   const MODEL_OPTIONS = [
-    { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast' },
+    { value: 'seedance2.0fast', label: 'Seedance Fast' },
     { value: 'seedance2.0', label: 'Seedance 2.0' },
+    { value: 'kling-o1', label: 'Kling O1' },
   ];
+
+  // Kling only supports 5s / 10s; Seedance supports full 4–15s range
+  const DURATION_OPTIONS = model === 'kling-o1' ? [5, 10] : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
   const updateTaskPrompt = (i: number, prompt: string) => {
     const next = [...tasks];
@@ -43,8 +50,33 @@ function SkillEditor({
     setTasks(next);
   };
 
-  const addTask = () => setTasks([...tasks, { prompt: '' }]);
+  const addTask = () => {
+    // Kling O1 only supports single tasks
+    if (model === 'kling-o1') return;
+    setTasks([...tasks, { prompt: '' }]);
+  };
   const removeTask = (i: number) => setTasks(tasks.filter((_, idx) => idx !== i));
+
+  const addSlot = (type: MaterialSlot['type']) => setSlots(prev => [...prev, { type }]);
+  const removeSlot = (i: number) => setSlots(prev => prev.filter((_, idx) => idx !== i));
+
+  async function pickSlotFile(index: number) {
+    const { files } = await window.api.selectFiles();
+    if (!files?.length) return;
+    setSlots(prev => { const next = [...prev]; next[index] = { ...next[index], path: files[0] }; return next; });
+  }
+
+  const slotTypeLabel = (t: MaterialSlot['type']) => t === 'image' ? '图片' : t === 'video' ? '视频' : '音频';
+  const slotTypeIcon  = (t: MaterialSlot['type']) => t === 'image' ? '🖼️' : t === 'video' ? '🎬' : '🎵';
+
+  // When switching to Kling, clamp to 1 task and valid duration
+  function handleModelChange(m: string) {
+    setModel(m);
+    if (m === 'kling-o1') {
+      if (tasks.length > 1) setTasks([tasks[0]]);
+      if (![5, 10].includes(duration)) setDuration(5);
+    }
+  }
 
   const isValid = name.trim() && tasks.every(t => t.prompt.trim());
 
@@ -94,13 +126,13 @@ function SkillEditor({
             <label className="text-[10px] text-text-muted uppercase tracking-wider block mb-2">默认参数</label>
             <div className="flex gap-2 flex-wrap">
               {MODEL_OPTIONS.map(m => (
-                <button key={m.value} onClick={() => setModel(m.value)}
+                <button key={m.value} onClick={() => handleModelChange(m.value)}
                   className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${model === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
                   {m.label}
                 </button>
               ))}
               <div className="w-px bg-border mx-1" />
-              {[4, 5, 6, 8, 10, 12, 15].map(d => (
+              {DURATION_OPTIONS.map(d => (
                 <button key={d} onClick={() => setDuration(d)}
                   className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${duration === d ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
                   {d}s
@@ -114,6 +146,45 @@ function SkillEditor({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Material Slots */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider">素材槽位（可选）</label>
+              <div className="flex items-center gap-1">
+                {(['image', 'video', 'audio'] as const).map(t => (
+                  <button key={t} onClick={() => addSlot(t)}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-surface-2 hover:bg-border text-text-muted hover:text-text-primary rounded transition-colors">
+                    <span>{slotTypeIcon(t)}</span> {slotTypeLabel(t)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {slots.length === 0 ? (
+              <p className="text-[10px] text-text-disabled">无槽位 · 使用时可自由上传素材</p>
+            ) : (
+              <div className="space-y-1.5">
+                {slots.map((slot, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-surface-2 rounded-md px-2.5 py-1.5">
+                    <span className="text-sm">{slotTypeIcon(slot.type)}</span>
+                    <span className="text-[11px] text-text-secondary w-8 shrink-0">{slotTypeLabel(slot.type)}</span>
+                    <button onClick={() => pickSlotFile(i)}
+                      className="flex-1 text-left text-[11px] text-text-muted hover:text-brand transition-colors truncate">
+                      {slot.path ? slot.path.split('/').pop() : '点击选择文件（可选）'}
+                    </button>
+                    {slot.path && (
+                      <button onClick={() => setSlots(prev => { const n = [...prev]; n[i] = { ...n[i], path: undefined }; return n; })}
+                        className="text-text-disabled hover:text-error transition-colors text-[10px]">清除</button>
+                    )}
+                    <button onClick={() => removeSlot(i)}
+                      className="text-text-disabled hover:text-error transition-colors shrink-0">
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tasks */}
@@ -155,10 +226,15 @@ function SkillEditor({
                 <p className="text-[10px] text-text-muted pl-7">...还有 {tasks.length - 3} 条（点击展开全部）</p>
               )}
             </div>
-            <button onClick={addTask}
-              className="mt-2 flex items-center gap-1 text-[11px] text-brand hover:text-brand/80 transition-colors">
-              <Plus size={11} /> 添加一条提示词
-            </button>
+            {model !== 'kling-o1' && (
+              <button onClick={addTask}
+                className="mt-2 flex items-center gap-1 text-[11px] text-brand hover:text-brand/80 transition-colors">
+                <Plus size={11} /> 添加一条提示词
+              </button>
+            )}
+            {model === 'kling-o1' && (
+              <p className="mt-1.5 text-[10px] text-text-disabled">Kling O1 仅支持单个任务</p>
+            )}
           </div>
         </div>
 
@@ -169,7 +245,7 @@ function SkillEditor({
             取消
           </button>
           <button
-            onClick={() => isValid && onSave({ name, description, model, duration, aspectRatio, tasks })}
+            onClick={() => isValid && onSave({ name, description, model, duration, aspectRatio, tasks, materialSlots: slots })}
             disabled={!isValid}
             className="px-4 py-2 text-xs text-white bg-brand hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-all"
           >
@@ -368,6 +444,7 @@ export function SkillsPanel() {
         duration: updates.duration || 5,
         aspectRatio: updates.aspectRatio || '9:16',
         tasks: updates.tasks || [{ prompt: '' }],
+        materialSlots: updates.materialSlots,
         createdAt: now,
         updatedAt: now,
         usedCount: 0,

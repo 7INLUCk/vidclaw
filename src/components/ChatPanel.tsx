@@ -1573,7 +1573,14 @@ export function ChatPanel() {
 
   // ── 技能相关状态 ──
   const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const [saveSkillContext, setSaveSkillContext] = useState<{ type: 'single' | 'batch'; prompt?: string } | null>(null);
+  const [saveSkillContext, setSaveSkillContext] = useState<{
+    type: 'single' | 'batch' | 'kling';
+    prompt?: string;
+    model?: string;
+    duration?: number;
+    aspectRatio?: string;
+    materialSlots?: Array<{ type: 'image' | 'video' | 'audio'; path?: string }>;
+  } | null>(null);
   const [saveSkillName, setSaveSkillName] = useState('');
 
   // ── 素材描述编辑处理 ──
@@ -2375,7 +2382,6 @@ export function ChatPanel() {
 
   // ── 技能确认提交（单个任务）──
   async function handleConfirmSkillTask(filePaths: string[], skill: Skill) {
-    const hasFiles = filePaths.length > 0;
     const prompt = skill.tasks[0].prompt;
 
     addMessage({
@@ -2392,16 +2398,46 @@ export function ChatPanel() {
     });
     setSubmitting(true);
     setGuidedStep('task-executing');
-    setStatusText('⏳ 正在提交任务...');
 
     try {
-      if (hasFiles) {
+      // ── Kling O1 路由 ──
+      if (skill.model === 'kling-o1') {
+        const imagePaths = filePaths.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+        if (imagePaths.length === 0) {
+          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: '❌ Kling O1 需要至少一张图片', timestamp: new Date(), type: 'error' });
+          return;
+        }
+        const cost = skill.duration * 10;
+        if (credits.balance < cost) {
+          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 积分不足，需要 ${cost} 积分`, timestamp: new Date(), type: 'error' });
+          return;
+        }
+        deductCredits(cost, `可灵 O1 技能 · ${skill.duration}s`);
+        const submitId = 'kling_' + Date.now();
+        const taskId = 'task_' + Date.now();
+        addTask({ id: taskId, submitId, prompt, type: 'video', status: 'generating', progress: 0, statusMessage: '准备中...', model: 'kling-o1', duration: skill.duration, materials: imagePaths.map(p => ({ path: p, type: 'image' as const })), createdAt: Date.now(), retryCount: 0 });
+        setStatusText('⏳ 正在生成可灵 O1 视频...');
+        const result = await window.api.klingGenerate({ imagePaths, prompt, duration: skill.duration, aspectRatio: skill.aspectRatio, submitId });
+        if (result.success) {
+          useStore.getState().updateTask(taskId, { status: result.localPath ? 'downloaded' : 'completed', resultUrl: result.videoUrl, localPath: result.localPath || undefined, filePath: result.localPath || undefined, downloaded: !!result.localPath, completedAt: Date.now(), progress: 100 });
+          addMessage({ id: Date.now().toString() + '_done', role: 'assistant', content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。`, timestamp: new Date() });
+        } else {
+          addCredits(cost, '可灵 O1 技能失败退款');
+          useStore.getState().updateTask(taskId, { status: 'failed', error: result.error, progress: 0 });
+          addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 生成失败: ${result.error}`, timestamp: new Date(), type: 'error' });
+        }
+        return;
+      }
+
+      // ── Seedance 路由 ──
+      setStatusText('⏳ 正在提交任务...');
+      if (filePaths.length > 0) {
         const materials: TaskMaterial[] = filePaths.map(f => ({ path: f, type: getFileType(f) }));
         setStatusText('📤 正在上传素材...');
         const result = await window.api.runStructuredTask({ prompt, materials, model: skill.model, duration: skill.duration, aspectRatio: skill.aspectRatio });
         if (result.success) {
           addTask({ id: 'task_' + Date.now(), submitId: (result as any).submitId, prompt, type: 'video', status: 'generating', model: skill.model, duration: skill.duration, materials: [], createdAt: Date.now(), startTime: Date.now(), retryCount: 0 });
-          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: `✅ 结构化任务已提交！\n模型: ${skill.model} | 时长: ${skill.duration}s | 比例: ${skill.aspectRatio}`, timestamp: new Date() });
+          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: `✅ 任务已提交！`, timestamp: new Date() });
         } else {
           addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 提交失败: ${result.error}`, timestamp: new Date(), type: 'error' });
         }
@@ -2409,7 +2445,7 @@ export function ChatPanel() {
         const result = await window.api.executeTask({ prompt, model: skill.model, duration: skill.duration, aspectRatio: skill.aspectRatio });
         if (result.success) {
           addTask({ id: 'task_' + Date.now(), submitId: (result as any).submitId, prompt, type: 'video', status: 'generating', model: skill.model, duration: skill.duration, materials: [], createdAt: Date.now(), startTime: Date.now(), retryCount: 0 });
-          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: '✅ 任务已提交！即梦正在生成中，结果会自动展示。', timestamp: new Date() });
+          addMessage({ id: Date.now().toString() + '_submitted', role: 'assistant', content: '✅ 任务已提交！', timestamp: new Date() });
         } else {
           addMessage({ id: Date.now().toString() + '_fail', role: 'assistant', content: `❌ 提交失败: ${result.error}`, timestamp: new Date(), type: 'error' });
         }
@@ -2477,7 +2513,22 @@ export function ChatPanel() {
   function handleSaveSkill() {
     if (!saveSkillName.trim() || !saveSkillContext) return;
     const now = Date.now();
-    if (saveSkillContext.type === 'single') {
+    if (saveSkillContext.type === 'kling') {
+      addSkill({
+        id: `skill_${now}`,
+        name: saveSkillName.trim(),
+        description: '',
+        type: 'single',
+        model: saveSkillContext.model || 'kling-o1',
+        duration: saveSkillContext.duration || selectedDuration,
+        aspectRatio: saveSkillContext.aspectRatio || selectedRatio,
+        tasks: [{ prompt: saveSkillContext.prompt || '' }],
+        materialSlots: saveSkillContext.materialSlots || [],
+        createdAt: now,
+        updatedAt: now,
+        usedCount: 0,
+      });
+    } else if (saveSkillContext.type === 'single') {
       addSkill({
         id: `skill_${now}`,
         name: saveSkillName.trim(),
@@ -2487,7 +2538,7 @@ export function ChatPanel() {
         duration: selectedDuration,
         aspectRatio: selectedRatio,
         tasks: [{ prompt: saveSkillContext.prompt || '' }],
-        materialSlots: selectedFiles.map(f => ({ type: getFileType(f) })),
+        materialSlots: selectedFiles.map(f => ({ type: getFileType(f), path: f })),
         createdAt: now,
         updatedAt: now,
         usedCount: 0,
@@ -2503,7 +2554,7 @@ export function ChatPanel() {
         duration: liveTasks[0]?.duration || selectedDuration,
         aspectRatio: liveTasks[0]?.aspectRatio || selectedRatio,
         tasks: liveTasks.map(t => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
-        materialSlots: (liveTasks[0]?.materials || []).map(m => ({ type: m.type as 'image' | 'video' | 'audio' })),
+        materialSlots: (liveTasks[0]?.materials || []).map(m => ({ type: m.type as 'image' | 'video' | 'audio', path: m.path })),
         createdAt: now,
         updatedAt: now,
         usedCount: 0,
@@ -2514,8 +2565,16 @@ export function ChatPanel() {
   }
 
   // ── 更新技能 ──
-  function handleUpdateSkill(prompt?: string) {
+  // capturedBatchTasks: snapshot taken at button-click time to avoid stale store read
+  function handleUpdateSkill(prompt?: string, capturedBatchTasks?: any[]) {
     if (!activeSkill) return;
+    const prevVersion = {
+      tasks: activeSkill.tasks,
+      model: activeSkill.model,
+      duration: activeSkill.duration,
+      aspectRatio: activeSkill.aspectRatio,
+      updatedAt: activeSkill.updatedAt,
+    };
     if (activeSkill.type === 'single') {
       updateSkill(activeSkill.id, {
         tasks: [{ prompt: prompt || activeSkill.tasks[0]?.prompt || '' }],
@@ -2523,29 +2582,17 @@ export function ChatPanel() {
         duration: selectedDuration,
         aspectRatio: selectedRatio,
         updatedAt: Date.now(),
-        prevVersion: {
-          tasks: activeSkill.tasks,
-          model: activeSkill.model,
-          duration: activeSkill.duration,
-          aspectRatio: activeSkill.aspectRatio,
-          updatedAt: activeSkill.updatedAt,
-        },
+        prevVersion,
       });
     } else {
-      const liveTasks = useStore.getState().batchTasks;
+      const liveTasks = (capturedBatchTasks as any) ?? useStore.getState().batchTasks;
       updateSkill(activeSkill.id, {
-        tasks: liveTasks.map(t => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
+        tasks: liveTasks.map((t: any) => ({ prompt: t.prompt, expectedEffect: t.expectedEffect })),
         model: liveTasks[0]?.model || selectedModel,
         duration: liveTasks[0]?.duration || selectedDuration,
         aspectRatio: liveTasks[0]?.aspectRatio || selectedRatio,
         updatedAt: Date.now(),
-        prevVersion: {
-          tasks: activeSkill.tasks,
-          model: activeSkill.model,
-          duration: activeSkill.duration,
-          aspectRatio: activeSkill.aspectRatio,
-          updatedAt: activeSkill.updatedAt,
-        },
+        prevVersion,
       });
     }
     setActiveSkill(null);
@@ -3209,8 +3256,8 @@ export function ChatPanel() {
                   setMessages={setMessages}
                   setTaskMode={setTaskMode}
                   onInputRestore={() => setInput(lastInput)}
-                  onSaveAsSkill={msg.type === 'ai-rewrite' || msg.type === 'batch-confirm' ? (prompt?: string) => setSaveSkillContext({ type: msg.type === 'batch-confirm' ? 'batch' : 'single', prompt }) : undefined}
-                  onUpdateSkill={activeSkill && (msg.type === 'ai-rewrite' || msg.type === 'batch-confirm') ? (prompt?: string) => handleUpdateSkill(prompt) : undefined}
+                  onSaveAsSkill={(msg.type === 'ai-rewrite' || msg.type === 'batch-confirm' || msg.type === 'kling-confirm') ? (prompt?: string) => setSaveSkillContext({ type: msg.type === 'batch-confirm' ? 'batch' : msg.type === 'kling-confirm' ? 'kling' : 'single', prompt }) : undefined}
+                  onUpdateSkill={activeSkill && (msg.type === 'ai-rewrite' || msg.type === 'batch-confirm') ? (prompt?: string) => handleUpdateSkill(prompt, useStore.getState().batchTasks) : undefined}
                   activeSkillName={activeSkill?.name}
                   onConfirmKling={msg.type === 'kling-confirm' ? handleConfirmKling : undefined}
                   onConfirmSkill={msg.type === 'skill-confirm' ? (files, sk) => {
@@ -3407,7 +3454,7 @@ export function ChatPanel() {
                 保存为技能
               </h3>
               <span className="text-[10px] text-text-muted ml-1">
-                {saveSkillContext.type === 'batch' ? `批量 · ${useStore.getState().batchTasks.length} 条` : '单个任务'}
+                {saveSkillContext.type === 'batch' ? `批量 · ${useStore.getState().batchTasks.length} 条` : saveSkillContext.type === 'kling' ? '可灵 O1 · 单个' : '单个任务'}
               </span>
             </div>
             <input
@@ -3615,13 +3662,13 @@ function SkillConfirmCard({
   const slots = skill.materialSlots || [];
   const isBatch = skill.type === 'batch' && skill.tasks.length > 1;
 
-  // Initialize: match initialFiles to slots by type
+  // Initialize: match initialFiles to slots by type; fall back to slot.path saved in skill
   const [slotFiles, setSlotFiles] = useState<(string | null)[]>(() => {
     const remaining = [...initialFiles];
     return slots.map(slot => {
       const idx = remaining.findIndex(f => getFileType(f) === slot.type);
       if (idx >= 0) return remaining.splice(idx, 1)[0];
-      return null;
+      return slot.path ?? null; // reuse saved file path from skill definition
     });
   });
 
@@ -3899,10 +3946,11 @@ function SubmittedSummaryBubble({ data }: {
   );
 }
 
-function KlingConfirmCard({ data, onConfirm, onCancel }: {
+function KlingConfirmCard({ data, onConfirm, onCancel, onSaveAsSkill }: {
   data: { prompt: string; imagePaths: string[]; duration: number; aspectRatio: string; cost: number };
   onConfirm: () => void;
   onCancel: () => void;
+  onSaveAsSkill?: () => void;
 }) {
   const { credits } = useStore();
   const canAfford = credits.balance >= data.cost;
@@ -3946,7 +3994,7 @@ function KlingConfirmCard({ data, onConfirm, onCancel }: {
           </span>
         </div>
         {/* Actions */}
-        <div className="flex gap-2 pt-0.5">
+        <div className="flex flex-wrap gap-2 pt-0.5">
           <button
             onClick={onConfirm}
             disabled={!canAfford}
@@ -3954,6 +4002,14 @@ function KlingConfirmCard({ data, onConfirm, onCancel }: {
           >
             确认生成
           </button>
+          {onSaveAsSkill && (
+            <button
+              onClick={onSaveAsSkill}
+              className="px-3 py-2 bg-surface-3 hover:bg-brand/10 text-text-muted hover:text-brand text-xs rounded-lg transition-colors border border-border-subtle hover:border-brand/30"
+            >
+              保存为技能
+            </button>
+          )}
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs rounded-lg transition-colors"
@@ -4209,6 +4265,7 @@ function MessageBubble({ msg, onDownload, onGuideClick, onConfirm, onEdit, onRet
           data={data}
           onConfirm={() => onConfirmKling?.(data)}
           onCancel={() => {}}
+          onSaveAsSkill={onSaveAsSkill ? () => onSaveAsSkill() : undefined}
         />
       </div>
     );
