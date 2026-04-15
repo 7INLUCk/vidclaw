@@ -18,7 +18,7 @@ export function AuthModal() {
   const [error, setError] = useState('');
 
   const hint = getDomainHint(email);
-  const canSubmit = hint !== null && !loading;
+  const canSubmit = hint === 'internal' && !loading;
 
   async function handleLogin() {
     if (!canSubmit) return;

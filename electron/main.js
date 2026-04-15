@@ -899,6 +899,9 @@ function registerIpcHandlers() {
     if (!domainMatch) return { success: false, error: '邮箱格式不正确' };
     const domain = domainMatch[1];
     const isInternal = INTERNAL_DOMAINS.includes(domain);
+    if (!isInternal) {
+      return { success: false, error: '此邮箱后缀不在内测名单，请使用公司邮箱（@miaoboai.com）' };
+    }
     return { success: true, isInternal, email: normalized };
   });
 
