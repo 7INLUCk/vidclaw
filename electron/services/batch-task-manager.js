@@ -340,14 +340,16 @@ class BatchTaskManager {
         if (!data) return;
 
         const status = data.gen_status || data.status || 'unknown';
-        
+        const queueInfo = data.queue_info || {};
+        const queueIdx = queueInfo.queue_idx ?? -1;
+
         if (status === 'success') {
           clearInterval(timer);
           this.pollingTimers.delete(task.submitId);
-          
+
           // 下载
           await this._downloadTask(task);
-          
+
           // 继续下一个
           await this._submitNextTask();
         } else if (status === 'failed') {
@@ -360,6 +362,12 @@ class BatchTaskManager {
           this._notifyTaskUpdate(task);
 
           await this._submitNextTask();
+        } else {
+          // 仍在排队/生成中，更新队列位置
+          if (queueIdx >= 0 && task.queuePosition !== queueIdx) {
+            task.queuePosition = queueIdx;
+            this._notifyTaskUpdate(task);
+          }
         }
       } catch (e) {
         console.error(`[批量任务轮询] 异常: ${e.message}`);

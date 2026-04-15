@@ -40,6 +40,7 @@ export interface BatchTaskItem {
   aspectRatio: string;
   model: string;
   status: 'pending' | 'submitted' | 'generating' | 'completed' | 'downloaded' | 'failed';
+  queuePosition?: number;
   outputFile?: string;
   error?: string;
 }

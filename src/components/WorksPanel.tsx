@@ -169,6 +169,7 @@ function BatchQueueSection() {
             const isDone = ['completed', 'downloaded'].includes(t.status);
             const isFailed = t.status === 'failed';
             const isActive = ['pending', 'submitted', 'generating'].includes(t.status);
+            const hasQueue = isActive && t.queuePosition != null && t.queuePosition >= 0;
             return (
               <div key={t.id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] ${
                 isFailed ? 'bg-error/8' : isDone ? 'bg-success/8' : 'bg-surface-3/50'
@@ -181,9 +182,9 @@ function BatchQueueSection() {
                 {isDone && <CheckCircle size={10} className="text-success flex-shrink-0" />}
                 {isFailed && <AlertTriangle size={10} className="text-error flex-shrink-0" />}
                 <span className={`text-[10px] font-medium flex-shrink-0 ${
-                  isFailed ? 'text-error' : isDone ? 'text-success' : 'text-brand'
+                  isFailed ? 'text-error' : isDone ? 'text-success' : hasQueue ? 'text-warning' : 'text-brand'
                 }`}>
-                  {isFailed ? '失败' : isDone ? '完成' : isActive ? '执行中' : '等待'}
+                  {isFailed ? '失败' : isDone ? '完成' : hasQueue ? `第${t.queuePosition! + 1}位` : isActive ? '执行中' : '等待'}
                 </span>
               </div>
             );
