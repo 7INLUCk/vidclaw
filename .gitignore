@@ -22,3 +22,6 @@ test/test-files/
 # IDE
 .idea/
 *.swp
+
+# Local Claude Code config (personal hooks, not team-wide)
+.claude/settings.json

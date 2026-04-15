@@ -4,6 +4,16 @@ import {
   ChevronDown, ChevronRight, FolderOpen
 } from 'lucide-react';
 import { useStore, type HistoryItem } from '../store';
+import { localFileUrlSync } from '../utils/localFile';
+
+/** 将本地绝对路径转成 file server URL，远程 URL 原样返回 */
+function toPlayableUrl(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('/') || /^[A-Za-z]:\\/.test(url)) {
+    return localFileUrlSync(url);
+  }
+  return url;
+}
 
 // ── Date grouping helpers ──
 function getDateGroup(timestamp: number): string {
@@ -49,7 +59,7 @@ function HistoryCard({ item, onPreview }: { item: HistoryItem; onPreview: (url: 
       <div className="aspect-video bg-surface-2 relative overflow-hidden">
         {item.thumbnailUrl ? (
           <img
-            src={item.thumbnailUrl}
+            src={toPlayableUrl(item.thumbnailUrl)}
             alt={item.prompt.slice(0, 20)}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
@@ -75,7 +85,7 @@ function HistoryCard({ item, onPreview }: { item: HistoryItem; onPreview: (url: 
         {/* Action overlay */}
         <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
           <button
-            onClick={() => onPreview(item.resultUrl)}
+            onClick={() => onPreview(toPlayableUrl(item.resultUrl))}
             className="p-1.5 rounded-md bg-black/60 backdrop-blur-sm hover:bg-brand text-white transition-colors"
             title="预览"
           >

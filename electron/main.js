@@ -426,16 +426,38 @@ function startPolling(submitId, task) {
       if (status === 'success') {
         // 触发下载
         const downloadDir = task.downloadDir || settings.downloadDir;
+        // 确保下载目录存在
+        try { fs.mkdirSync(downloadDir, { recursive: true }); } catch {}
+
         const downloadResult = await callDreamina([
           'query_result',
           '--submit_id=' + submitId,
           '--download_dir=' + downloadDir,
         ], 60000);
-        
+
         if (downloadResult.success) {
           const downloadData = parseCliJson(downloadResult.stdout);
-          const filePath = downloadData?.download_path || downloadData?.file_path || '';
-          
+          let filePath = downloadData?.download_path || downloadData?.file_path || '';
+
+          // 路径为空时：尝试在目录里找最新的视频文件
+          if (!filePath || !fs.existsSync(filePath)) {
+            console.warn(`[下载] filePath 为空或文件不存在: "${filePath}"，尝试在目录中查找`);
+            try {
+              const files = fs.readdirSync(downloadDir)
+                .filter(f => /\.(mp4|mov|webm)$/i.test(f))
+                .map(f => ({ name: f, mtime: fs.statSync(path.join(downloadDir, f)).mtimeMs }))
+                .sort((a, b) => b.mtime - a.mtime);
+              if (files.length > 0) {
+                filePath = path.join(downloadDir, files[0].name);
+                console.log(`[下载] 找到最新视频: ${filePath}`);
+              }
+            } catch (e) {
+              console.warn('[下载] 扫描目录失败:', e.message);
+            }
+          }
+
+          console.log(`[下载] 完成 filePath="${filePath}" downloadDir="${downloadDir}"`);
+
           sendToRenderer('task:progress', {
             event: 'result',
             data: {
@@ -446,10 +468,22 @@ function startPolling(submitId, task) {
               downloadDir,
             },
           });
-          
+
           sendTaskNotification(task);
         } else {
           console.warn(`[下载] 失败: ${downloadResult.error}`);
+          // 下载失败也通知前端（不标记为成功）
+          sendToRenderer('task:progress', {
+            event: 'result',
+            data: {
+              submitId,
+              prompt: task.prompt,
+              status: 'completed',
+              filePath: '',
+              downloadDir,
+              downloadError: downloadResult.error,
+            },
+          });
         }
       } else {
         sendToRenderer('task:progress', {
