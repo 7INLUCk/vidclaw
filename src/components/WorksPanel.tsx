@@ -109,13 +109,11 @@ function TaskErrorDisplay({ rawError, source, onRetry, onFix }: {
   );
 }
 
-// ── Active task queue card (compact) ─────────────────────────────────────────
+// ── Batch queue card — same size/style as QueueCard ──────────────────────────
 
-// ── Batch queue section — shown above single-task queue in WorksPanel ────────
-
-function BatchQueueSection() {
+function BatchQueueCard() {
   const { batchTasks, batchInfo } = useStore();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const total = batchTasks.length;
   if (total === 0) return null;
@@ -123,36 +121,46 @@ function BatchQueueSection() {
   const doneBatch = batchTasks.filter((t: BatchTaskItem) =>
     ['completed', 'downloaded', 'failed'].includes(t.status)
   );
-  const activeBatch = batchTasks.filter((t: BatchTaskItem) =>
-    ['pending', 'submitted', 'generating'].includes(t.status)
-  );
   const progressPct = Math.round((doneBatch.length / total) * 100);
-  const isRunning = activeBatch.length > 0;
+  const isRunning = doneBatch.length < total;
+
+  // Find the currently active sub-task for status display
+  const activeTask = batchTasks.find((t: BatchTaskItem) =>
+    ['submitted', 'generating'].includes(t.status)
+  );
+  const isQueuing   = activeTask && activeTask.queueStatus === 'Queuing';
+  const isGenerating = activeTask && activeTask.queueStatus === 'Generating';
+
+  let statusLabel: string;
+  let statusColor: string;
+  if (!isRunning)        { statusLabel = '已完成';  statusColor = 'text-success'; }
+  else if (isQueuing)    { statusLabel = `排队第${activeTask!.queuePosition! + 1}位`; statusColor = 'text-warning'; }
+  else if (isGenerating) { statusLabel = '生成中';  statusColor = 'text-brand'; }
+  else                   { statusLabel = '提交中';  statusColor = 'text-brand'; }
 
   return (
-    <div className="bg-surface-2 border border-border rounded-md p-3 flex flex-col gap-2 col-span-full">
-      {/* Header */}
+    <div className="bg-surface-2 border border-border rounded-md p-3 flex flex-col gap-2 min-w-0">
+      {/* Top row: status + badges */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           {isRunning
             ? <Loader2 size={11} className="animate-spin text-brand flex-shrink-0" />
             : <CheckCircle size={11} className="text-success flex-shrink-0" />
           }
-          <span className="text-[11px] font-medium text-brand">批量任务</span>
-          <span className="text-[10px] bg-brand/15 text-brand px-1.5 py-0.5 rounded-full flex-shrink-0">
+          <span className={`text-[11px] font-medium ${statusColor}`}>{statusLabel}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className="text-[10px] text-text-disabled bg-surface-3 px-1.5 py-0.5 rounded">批量</span>
+          <span className="text-[10px] text-brand bg-brand/10 px-1.5 py-0.5 rounded">
             {doneBatch.length}/{total}
           </span>
-          {batchInfo?.name && (
-            <span className="text-[10px] text-text-muted truncate">{batchInfo.name}</span>
-          )}
         </div>
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-1 text-[11px] text-text-muted hover:text-brand transition-colors flex-shrink-0"
-        >
-          {expanded ? <><ChevronUp size={12} />收起</> : <><ChevronDown size={12} />展开</>}
-        </button>
       </div>
+
+      {/* Batch name / prompt summary */}
+      <p className="text-xs text-text-secondary line-clamp-2 leading-snug">
+        {batchInfo?.name || batchInfo?.description || batchTasks[0]?.prompt || '批量生成任务'}
+      </p>
 
       {/* Progress bar */}
       <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
@@ -162,41 +170,47 @@ function BatchQueueSection() {
         />
       </div>
 
-      {/* Task rows */}
+      {/* Expand toggle */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors self-start"
+      >
+        {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        {expanded ? '收起明细' : `查看 ${total} 条明细`}
+      </button>
+
+      {/* Sub-task rows (expandable) */}
       {expanded && (
-        <div className="space-y-1 mt-0.5">
+        <div className="space-y-1">
           {batchTasks.map((t: BatchTaskItem, i: number) => {
             const isDone = ['completed', 'downloaded'].includes(t.status);
             const isFailed = t.status === 'failed';
             const isPending = t.status === 'pending';
-            const isRunning = ['submitted', 'generating'].includes(t.status);
-            // queue_status from Dreamina: "Queuing" = waiting in global queue, "Generating" = actively generating
-            const isQueuing   = isRunning && t.queueStatus === 'Queuing';
-            const isGenerating = isRunning && t.queueStatus === 'Generating';
+            const isTaskActive = ['submitted', 'generating'].includes(t.status);
+            const isTaskQueuing    = isTaskActive && t.queueStatus === 'Queuing';
+            const isTaskGenerating = isTaskActive && t.queueStatus === 'Generating';
 
-            let statusLabel: string;
-            let statusColor: string;
-            if (isFailed)       { statusLabel = '失败';   statusColor = 'text-error'; }
-            else if (isDone)    { statusLabel = '完成';   statusColor = 'text-success'; }
-            else if (isPending) { statusLabel = '待提交'; statusColor = 'text-text-muted'; }
-            else if (isQueuing) { statusLabel = `排队第${t.queuePosition! + 1}位`; statusColor = 'text-warning'; }
-            else if (isGenerating) { statusLabel = '生成中'; statusColor = 'text-brand'; }
-            else                { statusLabel = '提交中'; statusColor = 'text-brand'; }
+            let label: string;
+            let color: string;
+            if (isFailed)           { label = '失败';   color = 'text-error'; }
+            else if (isDone)        { label = '完成';   color = 'text-success'; }
+            else if (isPending)     { label = '待提交'; color = 'text-text-muted'; }
+            else if (isTaskQueuing) { label = `排队第${t.queuePosition! + 1}位`; color = 'text-warning'; }
+            else if (isTaskGenerating) { label = '生成中'; color = 'text-brand'; }
+            else                    { label = '提交中'; color = 'text-brand'; }
 
             return (
-              <div key={t.id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-[11px] ${
+              <div key={t.id} className={`flex items-center gap-2 px-1.5 py-1 rounded text-[11px] ${
                 isFailed ? 'bg-error/8' : isDone ? 'bg-success/8' : 'bg-surface-3/50'
               }`}>
                 <span className="text-[10px] font-mono text-text-disabled w-4 flex-shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <p className="flex-1 text-text-secondary truncate">{t.prompt}</p>
-                {isRunning && <Loader2 size={10} className="animate-spin text-brand flex-shrink-0" />}
+                {isTaskActive && <Loader2 size={10} className="animate-spin text-brand flex-shrink-0" />}
                 {isDone && <CheckCircle size={10} className="text-success flex-shrink-0" />}
                 {isFailed && <AlertTriangle size={10} className="text-error flex-shrink-0" />}
-                <span className={`text-[10px] font-medium flex-shrink-0 ${statusColor}`}>
-                  {statusLabel}
-                </span>
+                <span className={`text-[10px] font-medium flex-shrink-0 ${color}`}>{label}</span>
               </div>
             );
           })}
@@ -711,10 +725,7 @@ function getDateGroup(ts: number): string {
 export function WorksPanel() {
   const { tasks, batchTasks, batchHistory, retryTask, deleteTask, setPreviewUrl, removeBatchHistory } = useStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [queueExpanded, setQueueExpanded] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState<BatchHistoryRecord | null>(null);
-
-  const QUEUE_DEFAULT = 3;
 
   // ── Partition tasks ──────────────────────────────────────────────────────
   const activeTasks = useMemo(
@@ -728,10 +739,6 @@ export function WorksPanel() {
               .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt)),
     [tasks]
   );
-
-  // ── Queue display (collapse to QUEUE_DEFAULT) ────────────────────────────
-  const visibleQueue = queueExpanded ? activeTasks : activeTasks.slice(0, QUEUE_DEFAULT);
-  const hiddenCount = activeTasks.length - QUEUE_DEFAULT;
 
   // ── Works: merge doneTasks + batchHistory, sorted by time ───────────────
   type WorkItem =
@@ -811,29 +818,19 @@ export function WorksPanel() {
         {/* ── Queue section ──────────────────────────────────────────────── */}
         {(activeTasks.length > 0 || batchTasks.length > 0) && (
           <section className="px-4 pt-4 pb-2">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <Loader2 size={12} className="animate-spin text-brand" />
-                <span className="text-xs font-medium text-text-secondary">生成队列</span>
-                {activeTasks.length > 0 && (
-                  <span className="text-[10px] bg-brand/15 text-brand px-1.5 py-0.5 rounded-full">
-                    {activeTasks.length}
-                  </span>
-                )}
-              </div>
-              {activeTasks.length > QUEUE_DEFAULT && (
-                <button
-                  onClick={() => setQueueExpanded(v => !v)}
-                  className="flex items-center gap-1 text-[11px] text-text-muted hover:text-brand transition-colors"
-                >
-                  {queueExpanded ? <><ChevronUp size={12} />收起</> : <><ChevronDown size={12} />展开全部 (+{hiddenCount})</>}
-                </button>
+            <div className="flex items-center gap-2 mb-2.5">
+              <Loader2 size={12} className="animate-spin text-brand" />
+              <span className="text-xs font-medium text-text-secondary">生成队列</span>
+              {(activeTasks.length + (batchTasks.length > 0 ? 1 : 0)) > 0 && (
+                <span className="text-[10px] bg-brand/15 text-brand px-1.5 py-0.5 rounded-full">
+                  {activeTasks.length + (batchTasks.length > 0 ? 1 : 0)}
+                </span>
               )}
             </div>
 
             <div className={`grid gap-3 ${viewMode === 'grid' ? 'grid-cols-[repeat(auto-fill,minmax(260px,1fr))]' : 'grid-cols-1'}`}>
-              <BatchQueueSection />
-              {visibleQueue.map(t => <QueueCard key={t.id} task={t} />)}
+              <BatchQueueCard />
+              {activeTasks.map(t => <QueueCard key={t.id} task={t} />)}
             </div>
           </section>
         )}
