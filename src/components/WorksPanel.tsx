@@ -114,7 +114,6 @@ function TaskErrorDisplay({ rawError, source, onRetry, onFix }: {
 
 function BatchQueueCard() {
   const { batchTasks, batchInfo } = useStore();
-  const [expanded, setExpanded] = useState(false);
   const hasActiveTasks = batchTasks.some((t: BatchTaskItem) =>
     ['pending', 'submitted', 'generating'].includes(t.status)
   );
@@ -128,29 +127,36 @@ function BatchQueueCard() {
   const progressPct = Math.round((doneBatch.length / total) * 100);
   const isRunning = doneBatch.length < total;
 
-  // Find the currently active sub-task for status display
   const activeTask = batchTasks.find((t: BatchTaskItem) =>
     ['submitted', 'generating'].includes(t.status)
   );
-  const isQueuing   = activeTask && activeTask.queueStatus === 'Queuing';
+  const isQueuing    = activeTask && activeTask.queueStatus === 'Queuing';
   const isGenerating = activeTask && activeTask.queueStatus === 'Generating';
 
   let statusLabel: string;
   let statusColor: string;
-  if (!isRunning)        { statusLabel = '已完成';  statusColor = 'text-success'; }
-  else if (isQueuing)    { statusLabel = `排队第${activeTask!.queuePosition! + 1}位`; statusColor = 'text-warning'; }
-  else if (isGenerating) { statusLabel = '生成中';  statusColor = 'text-brand'; }
-  else                   { statusLabel = '提交中';  statusColor = 'text-brand'; }
+  let dotColor: string;
+  if (!isRunning)        { statusLabel = '已完成';  statusColor = 'text-success'; dotColor = 'bg-success'; }
+  else if (isQueuing)    { statusLabel = `排队第${activeTask!.queuePosition! + 1}位`; statusColor = 'text-warning'; dotColor = 'bg-warning'; }
+  else if (isGenerating) { statusLabel = '生成中';  statusColor = 'text-brand';   dotColor = 'bg-brand animate-pulse'; }
+  else                   { statusLabel = '提交中';  statusColor = 'text-brand';   dotColor = 'bg-brand animate-pulse'; }
+
+  // Task dot color per status
+  const taskDotColor = (t: BatchTaskItem): string => {
+    if (['completed', 'downloaded'].includes(t.status)) return 'bg-success';
+    if (t.status === 'failed') return 'bg-error';
+    if (['submitted', 'generating'].includes(t.status)) return 'bg-brand';
+    return 'bg-surface-3';
+  };
+
+  const showScrollRail = total > 3;
 
   return (
-    <div className="bg-surface-2 border border-border rounded-md p-3 flex flex-col gap-2 min-w-0">
-      {/* Top row: status + badges */}
+    <div className="bg-surface-2 border border-[rgba(255,255,255,0.08)] rounded-xl p-3 flex flex-col gap-2 min-w-0 max-w-[320px] active:scale-[0.97] transition-transform duration-150">
+      {/* Top row: status dot + label + badges */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {isRunning
-            ? <Loader2 size={11} className="animate-spin text-brand flex-shrink-0" />
-            : <CheckCircle size={11} className="text-success flex-shrink-0" />
-          }
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
           <span className={`text-[11px] font-medium ${statusColor}`}>{statusLabel}</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -161,63 +167,58 @@ function BatchQueueCard() {
         </div>
       </div>
 
-      {/* Batch name / prompt summary */}
+      {/* Batch name */}
       <p className="text-xs text-text-secondary line-clamp-2 leading-snug">
         {batchInfo?.name || batchInfo?.description || batchTasks[0]?.prompt || '批量生成任务'}
       </p>
 
-      {/* Progress bar */}
-      <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-brand rounded-full transition-all duration-500"
-          style={{ width: `${progressPct}%` }}
-        />
+      {/* Progress bar + percentage */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-0.5 bg-surface-3 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-brand rounded-full transition-[width] duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-text-disabled flex-shrink-0 w-7 text-right">
+          {progressPct}%
+        </span>
       </div>
 
-      {/* Expand toggle */}
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="flex items-center gap-1 text-[10px] text-text-muted hover:text-brand transition-colors self-start"
-      >
-        {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-        {expanded ? '收起明细' : `查看 ${total} 条明细`}
-      </button>
-
-      {/* Sub-task rows (expandable) */}
-      {expanded && (
-        <div className="space-y-1">
-          {batchTasks.map((t: BatchTaskItem, i: number) => {
-            const isDone = ['completed', 'downloaded'].includes(t.status);
-            const isFailed = t.status === 'failed';
-            const isPending = t.status === 'pending';
-            const isTaskActive = ['submitted', 'generating'].includes(t.status);
-            const isTaskQueuing    = isTaskActive && t.queueStatus === 'Queuing';
-            const isTaskGenerating = isTaskActive && t.queueStatus === 'Generating';
-
-            let label: string;
-            let color: string;
-            if (isFailed)           { label = '失败';   color = 'text-error'; }
-            else if (isDone)        { label = '完成';   color = 'text-success'; }
-            else if (isPending)     { label = '待提交'; color = 'text-text-muted'; }
-            else if (isTaskQueuing) { label = `排队第${t.queuePosition! + 1}位`; color = 'text-warning'; }
-            else if (isTaskGenerating) { label = '生成中'; color = 'text-brand'; }
-            else                    { label = '提交中'; color = 'text-brand'; }
-
-            return (
-              <div key={t.id} className={`flex items-center gap-2 px-1.5 py-1 rounded text-[11px] ${
-                isFailed ? 'bg-error/8' : isDone ? 'bg-success/8' : 'bg-surface-3/50'
-              }`}>
-                <span className="text-[10px] font-mono text-text-disabled w-4 flex-shrink-0">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <p className="flex-1 text-text-secondary truncate">{t.prompt}</p>
-                {isTaskActive && <Loader2 size={10} className="animate-spin text-brand flex-shrink-0" />}
-                {isDone && <CheckCircle size={10} className="text-success flex-shrink-0" />}
-                {isFailed && <AlertTriangle size={10} className="text-error flex-shrink-0" />}
-                <span className={`text-[10px] font-medium flex-shrink-0 ${color}`}>{label}</span>
+      {/* Activity Rail */}
+      {showScrollRail ? (
+        // >3 tasks: horizontal scroll with right fade mask
+        <div
+          className="relative overflow-hidden"
+          style={{ maskImage: 'linear-gradient(to right, black 80%, transparent 100%)' }}
+        >
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:hidden">
+            {batchTasks.map((t: BatchTaskItem, i: number) => (
+              <div
+                key={t.id}
+                className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[9px] font-mono
+                  ${['completed','downloaded'].includes(t.status) ? 'bg-success/15 text-success'
+                  : t.status === 'failed' ? 'bg-error/15 text-error'
+                  : ['submitted','generating'].includes(t.status) ? 'bg-brand/15 text-brand'
+                  : 'bg-surface-3 text-text-disabled'}`}
+                title={t.prompt}
+              >
+                {String(i + 1).padStart(2, '0')}
               </div>
-            );
-          })}
+            ))}
+          </div>
+        </div>
+      ) : (
+        // ≤3 tasks: inline dots with prompt truncated
+        <div className="flex items-center gap-2">
+          {batchTasks.map((t: BatchTaskItem, i: number) => (
+            <div key={t.id} className="flex items-center gap-1 min-w-0">
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${taskDotColor(t)}`} />
+              <span className="text-[10px] text-text-disabled truncate max-w-[72px]">
+                {t.prompt.slice(0, 14)}{t.prompt.length > 14 ? '…' : ''}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
