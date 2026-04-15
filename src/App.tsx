@@ -110,6 +110,152 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setActivePanel]);
 
+  // Global task progress listener — registered at App level so it survives panel switches
+  useEffect(() => {
+    const removeProgress = window.api.onProgress((data: any) => {
+      const store = useStore.getState();
+
+      if (data.event === 'queued' && data.data?.submitId) {
+        const found = store.tasks.find((t: any) => t.submitId === data.data.submitId);
+        if (found) {
+          const { queuePosition, queueLength } = data.data;
+          if (found.status !== 'queued' || found.queuePosition !== queuePosition || found.queueLength !== queueLength) {
+            store.updateTask(found.id, { status: 'queued', queuePosition, queueLength, nextPollAt: data.data.nextPollAt });
+          }
+        }
+        return;
+      }
+
+      if (data.event === 'kling-progress' && data.data?.submitId) {
+        const found = store.tasks.find((t: any) => t.submitId === data.data.submitId);
+        const nextStatus = data.data.stage === 'queued' ? 'queued' : 'generating';
+        if (found && (found.status !== nextStatus || found.progress !== data.data.progress || found.statusMessage !== data.data.message)) {
+          store.updateTask(found.id, { status: nextStatus, progress: data.data.progress, statusMessage: data.data.message, queuePosition: undefined, nextPollAt: undefined });
+        }
+        return;
+      }
+
+      if (data.event === 'progress' && data.data?.submitId) {
+        const found = store.tasks.find((t: any) => t.submitId === data.data.submitId);
+        if (found) store.updateTask(found.id, { status: 'generating', progress: data.data.progress ?? 50 });
+        return;
+      }
+
+      if (data.event === 'result') {
+        const found = store.tasks.find((t: any) => t.submitId === data.data?.submitId);
+        if (found) {
+          const resolvedResultUrl = data.data.resultUrl || data.data.filePath || found.resultUrl || '';
+          const resolvedLocalPath = data.data.filePath || found.localPath || '';
+          const isDownloaded = Boolean(data.data.filePath);
+          store.updateTask(found.id, {
+            status: isDownloaded ? 'downloaded' : 'completed',
+            filePath: data.data.filePath,
+            resultUrl: resolvedResultUrl,
+            localPath: resolvedLocalPath,
+            downloaded: isDownloaded,
+            progress: 100,
+            completedAt: Date.now(),
+          });
+          store.addHistory({
+            id: 'hist_' + Date.now(),
+            submitId: found.submitId,
+            prompt: found.prompt,
+            model: found.model,
+            duration: found.duration,
+            resultUrl: resolvedResultUrl,
+            localPath: resolvedLocalPath,
+            createdAt: Date.now(),
+            status: isDownloaded ? 'downloaded' : 'completed',
+          });
+          if (found.model === 'kling-o1') {
+            const cost = (found.duration || 5) * 10;
+            store.addMessage({ id: Date.now().toString() + '_kling_done', role: 'assistant', content: `✅ 可灵 O1 生成完成！已扣除 ${cost} 积分。${data.data.filePath ? `\n已保存至: ${data.data.filePath}` : ''}`, timestamp: new Date() });
+          } else {
+            store.addMessage({ id: Date.now().toString() + '_dl', role: 'system', content: `✅ 已下载: ${data.data?.filePath?.split('/').pop()}`, timestamp: new Date(), type: 'download' });
+          }
+        }
+        const u = store.usage;
+        store.updateUsage({ totalTasks: u.totalTasks + 1, completedTasks: u.completedTasks + 1, todayTasks: u.todayTasks + 1 });
+        return;
+      }
+
+      if (data.event === 'failed') {
+        const found = store.tasks.find((t: any) => t.submitId === data.data?.submitId);
+        if (found) {
+          store.updateTask(found.id, { status: 'failed', error: data.data?.error || '生成失败' });
+          if (found.model === 'kling-o1') {
+            const cost = (found.duration || 5) * 10;
+            store.addCredits(cost, '可灵 O1 生成失败退款');
+            store.addMessage({ id: Date.now().toString() + '_kling_fail', role: 'assistant', content: `❌ 可灵 O1 生成失败: ${data.data?.error || '未知错误'}\n已退还 ${cost} 积分`, timestamp: new Date(), type: 'error' });
+          }
+        }
+        const u = store.usage;
+        store.updateUsage({ totalTasks: u.totalTasks + 1, failedTasks: u.failedTasks + 1 });
+        return;
+      }
+
+      if (data.event === 'queue-task-submitted') {
+        store.addMessage({ id: Date.now().toString() + '_qs', role: 'system', content: `📋 队列任务已提交: ${data.data?.prompt?.slice(0, 40)}...`, timestamp: new Date() });
+        return;
+      }
+
+      if (data.event === 'queue-task-failed') {
+        store.addMessage({ id: Date.now().toString() + '_qf', role: 'system', content: `❌ 队列任务失败: ${data.data?.error}`, timestamp: new Date(), type: 'error' });
+        return;
+      }
+
+      if (data.event === 'batch-complete') {
+        const { succeeded, failed, total } = data.data;
+        store.addMessage({ id: Date.now().toString() + '_bc', role: 'assistant', content: `📦 批量任务完成!\n✅ ${succeeded} 成功 / ❌ ${failed} 失败 / 共 ${total} 个任务`, timestamp: new Date() });
+        const liveBatchTasks = store.batchTasks;
+        const liveBatchInfo = store.batchInfo;
+        if (liveBatchInfo && liveBatchTasks.length > 0) {
+          const sharedMat = liveBatchTasks[0]?.materials ?? [];
+          store.addBatchHistory({
+            id: liveBatchInfo.id || ('batch_hist_' + Date.now()),
+            name: liveBatchInfo.name || '批量任务',
+            description: liveBatchInfo.description || '',
+            model: liveBatchTasks[0]?.model ?? '',
+            duration: liveBatchTasks[0]?.duration ?? 5,
+            aspectRatio: liveBatchTasks[0]?.aspectRatio ?? '9:16',
+            sharedMaterials: sharedMat.map((m: any) => ({ path: m.path, type: m.type as 'image' | 'video' | 'audio' })),
+            totalTasks: total,
+            completedTasks: succeeded,
+            tasks: liveBatchTasks.map((bt: any) => ({
+              index: bt.index + 1,
+              prompt: bt.prompt,
+              status: (bt.status === 'downloaded' ? 'downloaded' : bt.status === 'failed' ? 'failed' : 'completed') as 'completed' | 'downloaded' | 'failed',
+              outputFile: bt.outputFile,
+              error: bt.error,
+            })),
+            createdAt: new Date(liveBatchInfo.createdAt).getTime(),
+            completedAt: Date.now(),
+          });
+        }
+        store.setBatchTasks([]);
+        store.setBatchInfo(null);
+        return;
+      }
+
+      if (data.event === 'batch-task-update') {
+        const task = data.data;
+        if (!task || task.index == null) return;
+        const batchTasks = store.batchTasks;
+        const updated = batchTasks.map((bt: any, idx: number) =>
+          idx === task.index - 1
+            ? { ...bt, status: task.status, outputFile: task.outputFile ?? bt.outputFile, error: task.error ?? bt.error, queuePosition: task.queuePosition ?? bt.queuePosition, queueStatus: task.queueStatus ?? bt.queueStatus, queueLength: task.queueLength ?? bt.queueLength }
+            : bt
+        );
+        store.setBatchTasks(updated);
+        const completedCount = updated.filter((t: any) => t.status === 'completed' || t.status === 'downloaded').length;
+        const batchInfo = store.batchInfo;
+        if (batchInfo) store.setBatchInfo({ ...batchInfo, completedTasks: completedCount });
+        return;
+      }
+    });
+    return () => removeProgress();
+  }, []);
+
   // Listen for backend events
   useEffect(() => {
     const removeLogin = window.api.onLoginRequired(() => {
