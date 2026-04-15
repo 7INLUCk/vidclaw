@@ -194,7 +194,7 @@ function loadSettings() {
   } catch {}
   return {
     downloadDir: path.join(app.getPath('downloads'), '即梦'),
-    autoDownload: false,
+    autoDownload: true,
     apiKey: 'sk-4b2f09aa14204571b1b33a5d97839a63',
     model: 'deepseek-chat',
   };

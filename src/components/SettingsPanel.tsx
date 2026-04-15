@@ -1,11 +1,48 @@
-import { useState } from 'react';
-import { FolderOpen, RefreshCw, Check, LogOut, BarChart3, TrendingUp, CheckCircle, XCircle, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FolderOpen, RefreshCw, Check, LogOut, BarChart3, TrendingUp, Calendar, Coins, RotateCcw } from 'lucide-react';
 import { useStore } from '../store';
+
+interface CreditDetail {
+  vipCredit: number;
+  giftCredit: number;
+  purchaseCredit: number;
+  totalCredit: number;
+}
 
 export function SettingsPanel() {
   const { settings, setSettings, addMessage, usage, setGuidedStep, setMessages } = useStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Account credit state
+  const [creditDetail, setCreditDetail] = useState<CreditDetail | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
+  const [creditUpdatedAt, setCreditUpdatedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    fetchCredits();
+  }, []);
+
+  async function fetchCredits() {
+    setCreditLoading(true);
+    setCreditError(null);
+    try {
+      const result = await window.api.checkCredits();
+      if (result.success && (result as any).data) {
+        const d = (result as any).data as CreditDetail;
+        setCreditDetail(d);
+        setCreditUpdatedAt(new Date());
+        useStore.getState().syncBalance(d.totalCredit);
+      } else {
+        setCreditError(result.error ?? '查询失败');
+      }
+    } catch {
+      setCreditError('网络异常，请重试');
+    } finally {
+      setCreditLoading(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -47,6 +84,11 @@ export function SettingsPanel() {
       });
     }
   }
+
+  const fmt = (n: number) => n.toLocaleString('zh-CN');
+  const timeStr = creditUpdatedAt
+    ? creditUpdatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <div className="flex flex-col h-full bg-surface-0">
@@ -92,35 +134,102 @@ export function SettingsPanel() {
             </div>
             <button
               onClick={() => setSettings({ autoDownload: !settings.autoDownload })}
-              className={`
-                w-10 h-5.5 rounded-full transition-colors relative
-                ${settings.autoDownload ? 'bg-brand' : 'bg-surface-3'}
-              `}
+              className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${
+                settings.autoDownload ? 'bg-brand' : 'bg-surface-3'
+              }`}
             >
               <span
-                className={`
-                  absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-transform shadow-sm
-                  ${settings.autoDownload ? 'translate-x-[20px]' : 'translate-x-0.5'}
-                `}
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${
+                  settings.autoDownload ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
               />
             </button>
           </section>
 
           <div className="h-px bg-border-subtle" />
 
-          {/* Re-login */}
+          {/* Account Info */}
           <section>
-            <label className="text-sm font-medium text-text-primary mb-2.5 block">即梦账号</label>
-            <button
-              onClick={handleRelogin}
-              className="flex items-center gap-2 px-3 py-2 rounded-md bg-surface-2 hover:bg-surface-3 text-text-secondary text-sm transition-colors border border-border-subtle hover:border-border"
-            >
-              <LogOut size={15} />
-              退出登录
-            </button>
-            <p className="text-[10px] text-text-disabled mt-1.5">
-              清除本地登录态，下次使用时需要重新登录
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <Coins size={14} className="text-brand" />
+                即梦账号
+              </label>
+              <div className="flex items-center gap-2">
+                {timeStr && (
+                  <span className="text-[10px] text-text-disabled">更新于 {timeStr}</span>
+                )}
+                <button
+                  onClick={fetchCredits}
+                  disabled={creditLoading}
+                  className="p-1 rounded-md hover:bg-surface-2 text-text-muted hover:text-text-primary transition-colors disabled:opacity-40"
+                  title="刷新积分"
+                >
+                  <RotateCcw size={12} className={creditLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+            </div>
+
+            {/* Credit card */}
+            {creditLoading && !creditDetail ? (
+              <div className="rounded-md border border-border-subtle bg-surface-1 p-3 space-y-2 animate-pulse">
+                <div className="h-4 w-24 bg-surface-3 rounded" />
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="h-12 bg-surface-3 rounded-md" />
+                  ))}
+                </div>
+              </div>
+            ) : creditError ? (
+              <div className="rounded-md border border-border-subtle bg-surface-1 px-3 py-2.5 flex items-center justify-between">
+                <span className="text-xs text-error/80">{creditError}</span>
+                <button
+                  onClick={fetchCredits}
+                  className="text-[11px] text-brand hover:underline"
+                >
+                  重试
+                </button>
+              </div>
+            ) : creditDetail ? (
+              <div className="rounded-md border border-border-subtle bg-surface-1 p-3">
+                {/* Total */}
+                <div className="flex items-baseline gap-1.5 mb-3">
+                  <span className="text-xl font-semibold font-mono text-text-primary tabular-nums">
+                    {fmt(creditDetail.totalCredit)}
+                  </span>
+                  <span className="text-xs text-text-muted">总积分</span>
+                </div>
+                {/* Breakdown */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'VIP 积分', value: creditDetail.vipCredit },
+                    { label: '赠送积分', value: creditDetail.giftCredit },
+                    { label: '充值积分', value: creditDetail.purchaseCredit },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-surface-2 rounded-md px-2 py-2 text-center">
+                      <p className="text-sm font-mono font-medium text-text-primary tabular-nums">
+                        {fmt(value)}
+                      </p>
+                      <p className="text-[10px] text-text-muted mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Re-login */}
+            <div className="mt-3">
+              <button
+                onClick={handleRelogin}
+                className="flex items-center gap-2 px-3 py-2 rounded-md bg-surface-2 hover:bg-surface-3 text-text-secondary text-sm transition-colors border border-border-subtle hover:border-border"
+              >
+                <LogOut size={15} />
+                退出登录
+              </button>
+              <p className="text-[10px] text-text-disabled mt-1.5">
+                清除本地登录态，下次使用时需要重新登录
+              </p>
+            </div>
           </section>
 
           <div className="h-px bg-border-subtle" />

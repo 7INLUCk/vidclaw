@@ -296,6 +296,7 @@ interface AppState {
   setAuth: (auth: AuthUser | null) => void;
   deductCredits: (amount: number, description: string) => boolean;
   addCredits: (amount: number, description: string) => void;
+  syncBalance: (balance: number) => void;
 
   // 视频预览
   previewUrl: string | null;
@@ -362,7 +363,7 @@ export const useStore = create<AppState>((set) => ({
 
   settings: {
     downloadDir: '',
-    autoDownload: false,
+    autoDownload: true,
   },
   settingsLoaded: false,
 
@@ -514,6 +515,11 @@ export const useStore = create<AppState>((set) => ({
   setAuth: (auth) => set(() => {
     try { localStorage.setItem('vidclaw_auth', auth ? JSON.stringify(auth) : ''); } catch {}
     return { auth };
+  }),
+  syncBalance: (balance) => set((s) => {
+    const credits = { ...s.credits, balance };
+    try { localStorage.setItem('vidclaw_credits', JSON.stringify(credits)); } catch {}
+    return { credits };
   }),
   deductCredits: (amount, description) => {
     const state = useStore.getState();
