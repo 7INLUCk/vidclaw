@@ -2784,39 +2784,6 @@ export function ChatPanel() {
     setActiveSkill(null);
   }
 
-  // ── 可灵 O1 图生视频 ──
-  function handleKlingSend() {
-    const imageFiles = selectedFiles.filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
-    if (imageFiles.length === 0) {
-      addMessage({
-        id: Date.now().toString() + '_kling_noimgs',
-        role: 'assistant',
-        content: '⚠️ 可灵 O1 是图生视频模型，请先上传至少一张图片（支持 jpg/png/webp）',
-        timestamp: new Date(),
-        type: 'error',
-      });
-      return;
-    }
-    const cost = selectedDuration * 10;
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim() || '（未输入提示词）',
-      timestamp: new Date(),
-      data: { materials: imageFiles.map((f, i) => ({ type: 'image', name: `图片${i + 1}`, path: f })) },
-    };
-    addMessage(userMsg);
-    addMessage({
-      id: Date.now().toString() + '_kling_confirm',
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      type: 'kling-confirm',
-      data: { prompt: input.trim(), imagePaths: imageFiles, duration: selectedDuration, aspectRatio: selectedRatio, cost },
-    });
-    setInput('');
-  }
-
   function showQueueToast(msg: string) {
     setQueueToast(msg);
     setTimeout(() => setQueueToast(''), 3000);
