@@ -544,10 +544,9 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
           </div>
         )}
 
-        {/* Top-left badges: mode | quantity | status (always 3 pills) */}
+        {/* Top-left badges: quantity | status */}
         <div className="absolute top-2 left-2 flex gap-1">
-          <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/60">单个</span>
-          <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">1 个</span>
+          <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">单视频</span>
           {isFailed
             ? <span className="px-1.5 py-0.5 rounded-md bg-error/80 text-[10px] text-white">失败</span>
             : task.status === 'downloaded'
@@ -922,10 +921,9 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
             </div>
           )}
 
-          {/* Top-left badges: mode | quantity | status (always 3 pills) */}
+          {/* Top-left badges: quantity | status */}
           <div className="absolute top-2 left-2 flex gap-1">
-            <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/60">批量</span>
-            <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">{record.totalTasks} 个</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">{record.totalTasks}个视频</span>
             {failCount > 0
               ? <span className="px-1.5 py-0.5 rounded-md bg-error/80 text-[10px] text-white">{failCount} 失败</span>
               : allDownloaded
