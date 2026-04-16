@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Zap } from 'lucide-react';
+import { X, Wand2 } from 'lucide-react';
 import { useStore, type Skill, type SkillTask } from '../../store';
 
 interface SaveSkillModalProps {
@@ -67,7 +67,7 @@ export function SaveSkillModal({ onClose, tasks, model, duration, aspectRatio, m
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Zap size={14} className="text-brand" />
+            <Wand2 size={14} className="text-brand" />
             <h3 className="text-sm font-semibold text-text-primary">保存为技能</h3>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">

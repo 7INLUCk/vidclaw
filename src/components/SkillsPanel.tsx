@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap, Plus, Trash2, Copy, Edit3, ChevronDown, ChevronUp, Clock, RotateCcw, MessageSquare, Layers } from 'lucide-react';
+import { Wand2, Bookmark, Plus, Trash2, Copy, Edit3, ChevronDown, ChevronUp, Clock, RotateCcw, MessageSquare, Layers, ImageIcon, Film, Music2 } from 'lucide-react';
 import { useStore, type Skill, type SkillTask } from '../store';
 import { localFileUrlSync } from '../utils/localFile';
 import { VideoThumb } from './confirm/VideoThumb';
@@ -74,7 +74,7 @@ function SkillEditor({
   }
 
   const slotTypeLabel = (t: MaterialSlot['type']) => t === 'image' ? '图片' : t === 'video' ? '视频' : '音频';
-  const slotTypeIcon  = (t: MaterialSlot['type']) => t === 'image' ? '🖼️' : t === 'video' ? '🎬' : '🎵';
+  const slotTypeIconEl = (t: MaterialSlot['type']) => t === 'image' ? <ImageIcon size={13} /> : t === 'video' ? <Film size={13} /> : <Music2 size={13} />;
   // Returns numbered label e.g. "图片1", "图片2", "视频1"
   function slotLabel(slots: MaterialSlot[], index: number) {
     const type = slots[index].type;
@@ -104,7 +104,7 @@ function SkillEditor({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Zap size={16} className="text-brand" />
+            <Wand2 size={16} className="text-brand" />
             <h3 className="text-sm font-semibold text-text-primary">
               {skill.id ? '编辑技能' : '新建技能'}
             </h3>
@@ -185,7 +185,7 @@ function SkillEditor({
                 {(['image', 'video', 'audio'] as const).map(t => (
                   <button key={t} onClick={() => addSlot(t)}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] bg-surface-2 hover:bg-border text-text-muted hover:text-text-primary rounded transition-colors">
-                    <span>{slotTypeIcon(t)}</span> {slotTypeLabel(t)}
+                    {slotTypeIconEl(t)} {slotTypeLabel(t)}
                   </button>
                 ))}
               </div>
@@ -208,13 +208,13 @@ function SkillEditor({
                         ) : slot.type === 'video' ? (
                           <VideoThumb path={slot.path} size={24} />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-purple-500/20">
-                            <span className="text-purple-400">♪</span>
+                          <div className="w-full h-full flex items-center justify-center bg-purple-500/10">
+                            <Music2 size={18} className="text-purple-400/80" />
                           </div>
                         )}
                       </button>
                     ) : (
-                      <span className="text-[10px] text-text-disabled shrink-0 font-mono">{slotLabel(slots, i)}</span>
+                      <span className="text-text-disabled shrink-0">{slotTypeIconEl(slot.type)}</span>
                     )}
                     <span className="text-[11px] text-text-secondary shrink-0 min-w-[3rem]">{slotLabel(slots, i)}</span>
                     <button onClick={() => pickSlotFile(i)}
@@ -339,7 +339,7 @@ function SkillCard({
       <div className="flex items-start gap-3 p-4">
         {/* Icon */}
         <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Zap size={14} className="text-brand" />
+          <Wand2 size={14} className="text-brand" />
         </div>
 
         {/* Info */}
@@ -543,7 +543,7 @@ export function SkillsPanel() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <Zap size={16} className="text-brand" />
+          <Wand2 size={16} className="text-brand" />
           <div>
             <h1 className="text-sm font-semibold text-text-primary">技能库</h1>
             <p className="text-xs text-text-muted">{skills.length} 个已保存的配方</p>
@@ -563,7 +563,7 @@ export function SkillsPanel() {
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-center max-w-xs mx-auto">
             <div className="w-14 h-14 rounded-xl bg-brand/10 flex items-center justify-center mb-4">
-              <Zap size={24} className="text-brand" />
+              <Wand2 size={24} className="text-brand" />
             </div>
             <h3 className="text-sm font-semibold text-text-primary mb-2">还没有技能</h3>
             <p className="text-xs text-text-muted mb-6 leading-relaxed">

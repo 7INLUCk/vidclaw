@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap } from 'lucide-react';
+import { Wand2, Bookmark, Zap } from 'lucide-react';
 import { useStore } from '../../store';
 import { localFileUrlSync } from '../../utils/localFile';
 import { SaveSkillModal } from './SaveSkillModal';
@@ -42,7 +42,7 @@ export function KlingConfirmCard({ data, onConfirm, onCancel }: {
           {/* Header */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold text-brand flex items-center gap-1.5">
-              <Zap size={11} /> 可灵 O1 · 图生视频
+              <Wand2 size={11} /> 可灵 O1 · 图生视频
             </span>
           </div>
 
@@ -92,7 +92,7 @@ export function KlingConfirmCard({ data, onConfirm, onCancel }: {
               onClick={() => setShowSaveModal(true)}
               className="px-3 py-2 bg-surface-3 hover:bg-brand/10 text-text-muted hover:text-brand text-xs rounded-lg transition-colors border border-border-subtle hover:border-brand/30"
             >
-              <Zap size={11} className="inline mr-1" />保存为技能
+              <Bookmark size={11} className="inline mr-1" />保存为技能
             </button>
             <div className="flex-1" />
             <button onClick={onCancel} className="px-4 py-2 bg-surface-3 hover:bg-border text-text-secondary text-xs rounded-lg transition-colors">

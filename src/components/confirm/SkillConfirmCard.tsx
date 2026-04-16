@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, CheckCircle, Plus, AlertTriangle, Play, Zap } from 'lucide-react';
+import { X, CheckCircle, Plus, AlertTriangle, Play, Wand2, Bookmark, Music2 } from 'lucide-react';
 import { useStore, type Skill, type SkillTask } from '../../store';
 import { localFileUrlSync, getFileType } from '../../utils/localFile';
 import { VideoThumb } from './VideoThumb';
@@ -136,7 +136,7 @@ export function SkillConfirmCard({
           {/* Header */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-brand font-medium flex items-center gap-1.5">
-              <Zap size={12} /> 技能 · {skill.name}
+              <Wand2 size={12} /> 技能 · {skill.name}
             </p>
           </div>
 
@@ -186,8 +186,8 @@ export function SkillConfirmCard({
                         ) : slot.type === 'video' ? (
                           <VideoThumb path={slotFiles[i]!} size={28} />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-purple-500/20">
-                            <span className="text-purple-400">♪</span>
+                          <div className="w-full h-full flex items-center justify-center bg-purple-500/10">
+                            <Music2 size={18} className="text-purple-400/80" />
                           </div>
                         )
                       ) : (
@@ -299,7 +299,7 @@ export function SkillConfirmCard({
               onClick={() => setShowSaveModal(true)}
               className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] text-text-muted hover:text-brand hover:bg-brand/10 rounded-md transition-all border border-border-subtle hover:border-brand/30"
             >
-              <Zap size={11} /> 保存为技能
+              <Bookmark size={11} /> 保存为技能
             </button>
             <div className="flex-1" />
             <button
