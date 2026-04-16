@@ -399,7 +399,7 @@ function SkillCard({
 
 // ── Main Panel ──
 export function SkillsPanel() {
-  const { skills, addSkill, updateSkill, deleteSkill, setActiveSkill, setActivePanel } = useStore();
+  const { skills, addSkill, updateSkill, deleteSkill, setActiveSkill, setActivePanel, setPendingSkillConfirm } = useStore();
   const [editing, setEditing] = useState<(Partial<Skill> & { tasks: SkillTask[] }) | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -481,7 +481,7 @@ export function SkillsPanel() {
 
   function handleUse(skill: Skill) {
     updateSkill(skill.id, { usedCount: skill.usedCount + 1 });
-    setActiveSkill(skill);
+    setPendingSkillConfirm(skill);
     setActivePanel('chat');
   }
 

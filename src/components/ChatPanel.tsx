@@ -1577,7 +1577,7 @@ export function ChatPanel() {
   const setBatchInfo = useStore(s => s.setBatchInfo);
   const addHistory = useStore(s => s.addHistory);
   const updateUsage = useStore(s => s.updateUsage);
-  const { addSkill, updateSkill, activeSkill, setActiveSkill, credits, deductCredits, addCredits } = useStore();
+  const { addSkill, updateSkill, activeSkill, setActiveSkill, credits, deductCredits, addCredits, pendingSkillConfirm, setPendingSkillConfirm } = useStore();
 
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -1727,7 +1727,27 @@ export function ChatPanel() {
     }
   }, []);
 
-
+  // Auto-insert skill-confirm card when SkillsPanel triggers a skill
+  useEffect(() => {
+    if (!pendingSkillConfirm) return;
+    const skill = pendingSkillConfirm;
+    setPendingSkillConfirm(null);
+    addMessage({
+      id: Date.now().toString(),
+      role: 'user',
+      content: `[应用技能] ${skill.name}`,
+      timestamp: new Date(),
+    });
+    setGuidedStep('task-confirming');
+    addMessage({
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      type: 'skill-confirm',
+      data: { skill, initialFiles: [] },
+    });
+  }, [pendingSkillConfirm]);
 
   // ── Guide flow handlers ──
   async function handleReady() {
@@ -1828,12 +1848,6 @@ export function ChatPanel() {
   async function handleSend() {
     if (isSubmitting) return;
     if (guidedStep === 'task-confirming') return;
-
-    // Skill mode: bypass AI, go directly to confirm card
-    if (activeSkill) {
-      handleSkillSend();
-      return;
-    }
 
     // Kling O1: 必须上传图片，校验失败直接提示
     if (selectedModel === 'kling-o1') {
@@ -2638,24 +2652,11 @@ export function ChatPanel() {
   // ── 技能应用 ──
   function handleApplySkill(skill: Skill) {
     setShowSkillPicker(false);
-    setActiveSkill(skill);
-    // Pre-fill params
-    setSelectedModel(skill.model);
-    setSelectedDuration(skill.duration);
-    setSelectedRatio(skill.aspectRatio);
-  }
-
-  function handleSkillSend() {
-    if (!activeSkill) return;
-    const skill = activeSkill;
-    setActiveSkill(null);
-    const initialFiles = [...selectedFiles];
-
-    const flatMaterials = initialFiles.map((f, idx) => {
+    const files = [...selectedFiles];
+    const flatMaterials = files.map((f, idx) => {
       const type = getFileType(f);
       return { type, name: `${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}${idx + 1}`, path: f };
     });
-
     addMessage({
       id: Date.now().toString(),
       role: 'user',
@@ -2663,18 +2664,16 @@ export function ChatPanel() {
       timestamp: new Date(),
       ...(flatMaterials.length > 0 && { data: { materials: flatMaterials } }),
     });
-    setSelectedFiles([]);
-    setInput('');
     setGuidedStep('task-confirming');
-
     addMessage({
       id: (Date.now() + 1).toString(),
       role: 'assistant',
       content: '',
       timestamp: new Date(),
       type: 'skill-confirm',
-      data: { skill, initialFiles },
+      data: { skill, initialFiles: files },
     });
+    setSelectedFiles([]);
   }
 
   // ── 技能确认提交（单个任务）──

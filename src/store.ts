@@ -370,6 +370,8 @@ interface AppState {
   updateSkill: (id: string, updates: Partial<Skill>) => void;
   deleteSkill: (id: string) => void;
   setActiveSkill: (skill: Skill | null) => void;
+  pendingSkillConfirm: Skill | null;
+  setPendingSkillConfirm: (skill: Skill | null) => void;
   // 用量 Actions
   updateUsage: (updates: Partial<UsageStats>) => void;
 }
@@ -444,6 +446,7 @@ export const useStore = create<AppState>((set) => ({
     } catch { return []; }
   })(),
   activeSkill: null,
+  pendingSkillConfirm: null,
   // 鉴权 & 积分
   auth: (() => {
     try {
@@ -554,6 +557,7 @@ export const useStore = create<AppState>((set) => ({
     return { skills };
   }),
   setActiveSkill: (activeSkill) => set({ activeSkill }),
+  setPendingSkillConfirm: (pendingSkillConfirm) => set({ pendingSkillConfirm }),
   // 鉴权 Actions
   setAuth: (auth) => set((s) => {
     try { localStorage.setItem('vidclaw_auth', auth ? JSON.stringify(auth) : ''); } catch {}
