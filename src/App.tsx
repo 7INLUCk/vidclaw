@@ -41,6 +41,9 @@ declare global {
       getStatus: () => Promise<{ browserReady: boolean; isLoggedIn: boolean | null; version: string; resultsCount: number; queueStatus: any }>;
       openDownloadDir: () => Promise<{ success: boolean; error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      saveFileAs: (args: { srcPath: string; suggestedName: string }) => Promise<{ success: boolean; filePath?: string }>;
+      deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       getFileStat: (filePath: string) => Promise<{ size: number }>;
       getFileServerPort: () => Promise<number>;
       onProgress: (callback: (data: any) => void) => () => void;

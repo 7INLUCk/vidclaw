@@ -459,16 +459,14 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
   onRetry: (id: string) => void;
   highlighted?: boolean;
 }) {
-  const { downloadTask } = useStore();
+  const { downloadTask, settings } = useStore();
   const isFailed = task.status === 'failed';
   const isDone = ['completed', 'downloaded'].includes(task.status);
   const cardRef = useRef<HTMLDivElement>(null);
   const openablePath = getOpenableLocalPath(task.localPath, task.filePath, task.resultUrl);
   const playUrl = task.localPath ? toPlayable(task.localPath) : task.resultUrl ? toPlayable(task.resultUrl) : '';
   const canManualDownload = Boolean(task.submitId || isRemoteHttpUrl(task.resultUrl));
-
-  const [deleteCountdown, setDeleteCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (highlighted) {
@@ -476,63 +474,41 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
     }
   }, [highlighted]);
 
-  // Reset delete confirm when countdown reaches 0
-  useEffect(() => {
-    if (deleteCountdown <= 0) return;
-    // Only start a new interval if none is running
-    if (countdownRef.current) return;
-    countdownRef.current = setInterval(() => {
-      setDeleteCountdown(c => {
-        if (c <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          countdownRef.current = null;
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => {
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
-    };
-  }, [deleteCountdown]);
+  const suggestedName = useMemo(() => {
+    const base = (task.prompt || 'video').slice(0, 20).replace(/[^\w\u4e00-\u9fa5]/g, '_');
+    return `${base}_${task.model}_${task.duration}s.mp4`;
+  }, [task.prompt, task.model, task.duration]);
 
-  const handleDeleteClick = useCallback(() => {
-    if (deleteCountdown > 0) {
-      // Second click — confirm delete
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      setDeleteCountdown(0);
-      onDelete(task.id);
-    } else {
-      // First click — start countdown
-      setDeleteCountdown(3);
+  const handleConfirmDelete = useCallback(async () => {
+    if (task.localPath) {
+      await window.api.deleteFile(task.localPath).catch(() => {});
     }
-  }, [deleteCountdown, onDelete, task.id]);
+    onDelete(task.id);
+  }, [task.id, task.localPath, onDelete]);
 
-  const handleDownload = useCallback(() => {
-    if (openablePath) {
-      window.api.openFile(openablePath);
-      return;
-    }
-    if (task.status === 'completed' && canManualDownload) {
+  const handleDownload = useCallback(async () => {
+    if (settings.autoDownload && openablePath) {
+      await window.api.showItemInFolder(openablePath);
+    } else if (!settings.autoDownload && openablePath) {
+      await window.api.saveFileAs({ srcPath: openablePath, suggestedName });
+    } else if (canManualDownload) {
       void downloadTask(task.id);
     }
-  }, [canManualDownload, downloadTask, openablePath, task]);
+  }, [settings.autoDownload, openablePath, suggestedName, canManualDownload, downloadTask, task.id]);
 
   return (
     <div
       ref={cardRef}
-      className={`group relative bg-surface-1 border rounded-2xl overflow-hidden cursor-pointer
+      onClick={() => { if (!isFailed && playUrl) onPreview(playUrl); }}
+      className={`group relative bg-surface-1 border rounded-2xl cursor-pointer
         active:scale-[0.97] transition-all duration-150 ${
         highlighted
           ? 'border-brand shadow-[0_0_0_1px_rgba(54,118,255,0.28)]'
           : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.16)]'
       }`}
     >
-      {/* Thumbnail */}
-      <div className="aspect-square bg-surface-2 relative overflow-hidden">
+      {/* Thumbnail — overflow-hidden lives here, not on outer div */}
+      <div className="aspect-square bg-surface-2 relative overflow-hidden rounded-t-2xl">
         {task.thumbnailUrl ? (
           <img
             src={toPlayable(task.thumbnailUrl)}
@@ -556,7 +532,7 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
           </div>
         )}
 
-        {/* Duration badge — top left */}
+        {/* Duration / status badges — top left */}
         <div className="absolute top-2 left-2 flex gap-1">
           <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80 font-mono">
             {task.duration}s
@@ -569,76 +545,77 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
           )}
         </div>
 
-        {/* Bottom overlay gradient + info + actions */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-8 pb-2.5 px-2.5">
-          {/* Prompt text */}
-          <p
-            className="text-[11px] text-white line-clamp-2 leading-snug mb-2"
-            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}
-          >
-            {task.prompt || '无提示词'}
-          </p>
-
-          {/* Model badge + actions row */}
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[10px] text-white/50">{modelName(task.model)}</span>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(task.prompt); }}
-                className="p-1.5 rounded-lg bg-black/50 text-white/30 hover:text-white/90 transition-colors opacity-30 group-hover:opacity-100"
-                title="复制提示词"
-              >
-                <Copy size={11} />
-              </button>
-              {!isFailed && playUrl && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onPreview(playUrl); }}
-                  className="p-1.5 rounded-lg bg-black/50 text-white/30 hover:text-white/90 transition-colors opacity-30 group-hover:opacity-100"
-                  title="播放"
-                >
-                  <Play size={11} />
-                </button>
-              )}
-              {!isFailed && (openablePath || canManualDownload) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDownload(); }}
-                  className="p-1.5 rounded-lg bg-black/50 text-white/30 hover:text-white/90 transition-colors opacity-30 group-hover:opacity-100"
-                  title="下载"
-                >
-                  <Download size={11} />
-                </button>
-              )}
-              {isFailed && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRetry(task.id); }}
-                  className="p-1.5 rounded-lg bg-black/50 text-white/30 hover:text-white/90 transition-colors opacity-30 group-hover:opacity-100"
-                  title="重试"
-                >
-                  <RefreshCw size={11} />
-                </button>
-              )}
-              {/* Delete — two-step confirm */}
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteClick(); }}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  deleteCountdown > 0
-                    ? 'bg-error/70 text-white opacity-100'
-                    : 'bg-black/50 text-white/30 hover:text-error opacity-30 group-hover:opacity-100'
-                }`}
-                title={deleteCountdown > 0 ? `再次点击确认删除 (${deleteCountdown}s)` : '删除'}
-              >
-                {deleteCountdown > 0
-                  ? <span className="text-[11px] font-mono w-3 text-center block">{deleteCountdown}</span>
-                  : <Trash2 size={11} />
-                }
-              </button>
-            </div>
+        {/* Hover play overlay (success only) */}
+        {!isFailed && playUrl && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
+            <Play size={40} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Footer — failed */}
+      {/* Info section */}
+      <div className="px-3 pt-2.5 pb-1">
+        <p className="text-[12px] text-text-secondary line-clamp-2 leading-snug">
+          {task.prompt || '无提示词'}
+        </p>
+        <p className="text-[11px] text-text-muted mt-1">
+          {modelName(task.model)} · {task.duration}s
+        </p>
+        <p className="text-[11px] text-text-disabled mt-0.5">
+          {task.completedAt ? fmtDate(task.completedAt) : ''}
+        </p>
+      </div>
+
+      {/* Action row — success */}
+      {!isFailed && (
+        <div className="flex items-center justify-end gap-1 px-3 pb-2.5" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => navigator.clipboard.writeText(task.prompt)}
+            className="p-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-text-muted hover:text-text-primary transition-colors"
+            title="复制提示词"
+          >
+            <Copy size={12} />
+          </button>
+          {(openablePath || canManualDownload) && (
+            <button
+              onClick={handleDownload}
+              className="p-1.5 rounded-lg bg-surface-3 hover:bg-surface-2 text-text-muted hover:text-text-primary transition-colors"
+              title={settings.autoDownload && openablePath ? '在文件夹中显示' : '下载'}
+            >
+              {settings.autoDownload && openablePath ? <FolderOpen size={12} /> : <Download size={12} />}
+            </button>
+          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-1.5 rounded-lg bg-surface-3 hover:bg-error hover:text-white text-text-muted transition-colors"
+            title="删除"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Action row — failed */}
+      {isFailed && (
+        <div className="flex items-center justify-end gap-1 px-3 pb-2.5" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => onRetry(task.id)}
+            className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors"
+            title="重试"
+          >
+            <RefreshCw size={12} />
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-1.5 rounded-lg bg-surface-3 hover:bg-error hover:text-white text-text-muted transition-colors"
+            title="删除"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* FailedFooter — auto-expands card height */}
       {isFailed && (
         <FailedFooter
           error={task.error}
@@ -646,15 +623,30 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
           onRetry={() => onRetry(task.id)}
         />
       )}
-      {/* Footer — success */}
-      {!isFailed && (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-[11px] text-text-muted">
-            {modelName(task.model)} · {task.duration}s
+
+      {/* Delete confirm strip */}
+      {showDeleteConfirm && (
+        <div
+          className="flex items-center justify-between px-3 py-2 bg-error/10 border-t border-error/20"
+          onClick={e => e.stopPropagation()}
+        >
+          <span className="text-[11px] text-error">
+            {task.localPath ? '同时删除本地文件？' : '删除任务记录？'}
           </span>
-          <span className="text-[11px] text-text-disabled">
-            {task.completedAt ? fmtDate(task.completedAt) : ''}
-          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              className="text-[11px] text-error hover:text-error/80 font-medium transition-colors"
+            >
+              删除
+            </button>
+          </div>
         </div>
       )}
     </div>
