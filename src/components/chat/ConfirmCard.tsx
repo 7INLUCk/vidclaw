@@ -200,7 +200,9 @@ export function ConfirmCard({
         )}
 
         {hasFiles && (
-          <p className="text-[10px] text-brand mb-3">⚡ 结构化模式：素材将通过 API 直接上传</p>
+          <p className="text-[10px] text-brand mb-3">
+            {selectedModel === 'kling-o1' ? '📎 素材将提交给可灵 O1' : '⚡ 结构化模式：素材将通过 API 直接上传'}
+          </p>
         )}
 
         <div className="flex items-center gap-2">

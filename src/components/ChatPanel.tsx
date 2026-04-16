@@ -1321,7 +1321,9 @@ function ConfirmCard({
           </div>
 
           {hasFiles && (
-            <p className="text-[10px] text-text-muted mb-3">📎 素材将随任务一起提交给即梦 CLI</p>
+            <p className="text-[10px] text-text-muted mb-3">
+              {isKling ? '📎 素材将提交给可灵 O1' : '📎 素材将随任务一起提交给即梦 CLI'}
+            </p>
           )}
 
           {/* 积分余额行 */}
