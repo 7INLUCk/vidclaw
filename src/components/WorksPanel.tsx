@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2, CheckCircle, AlertTriangle, Download, Play, Trash2, RefreshCw,
   LayoutGrid, List, FolderOpen, Film, Image as ImageIcon, X, ChevronDown,
@@ -826,12 +826,31 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
 // ── Batch folder card — grid mode ─────────────────────────────────────────────
 
 function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClick: () => void }) {
+  const { removeBatchHistory } = useStore();
   const doneCount = record.tasks.filter(t => t.status !== 'failed').length;
   const failCount = record.tasks.filter(t => t.status === 'failed').length;
   const cover = record.tasks.find(t => t.outputFile)?.outputFile;
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [folderClicked, setFolderClicked] = useState(false);
+
+  const handleOpenFolder = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!cover) return;
+    setFolderClicked(true);
+    await window.api.showItemInFolder(cover);
+    setTimeout(() => setFolderClicked(false), 800);
+  }, [cover]);
+
+  const handleConfirmDelete = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    for (const t of record.tasks) {
+      if (t.outputFile) await window.api.deleteFile(t.outputFile).catch(() => {});
+    }
+    removeBatchHistory(record.id);
+  }, [record.tasks, record.id, removeBatchHistory]);
 
   return (
-    // Outer wrapper with bottom padding to show stacked layers
+    // Outer wrapper with bottom/right padding to show stacked layers
     <div
       className="relative pb-2 pr-2 cursor-pointer group"
       onClick={onClick}
@@ -883,23 +902,78 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
           </div>
         </div>
 
-        {/* Info */}
-        <div className="px-3 py-2.5">
-          <p className="text-xs font-medium text-text-primary truncate">{record.name}</p>
-          <div className="flex items-center gap-1 mt-1">
-            <span className="text-[11px] text-text-disabled">{modelName(record.model)} · {record.duration}s · {record.aspectRatio}</span>
-          </div>
-          <div className="flex items-center gap-1 mt-1.5">
-            <CheckCircle size={11} className="text-success" />
+        {/* Info — 3-row structure mirroring SingleCardGrid for height parity */}
+        <div className="px-3 pt-2.5 pb-1">
+          {/* Row 1: batch name — min-h matches SingleCardGrid 2-line prompt height */}
+          <p className="text-[12px] font-medium text-text-primary leading-snug min-h-[2.0625rem] truncate">
+            {record.name}
+          </p>
+          {/* Row 2: model · duration · ratio */}
+          <p className="text-[11px] text-text-muted mt-1">
+            {modelName(record.model)} · {record.duration}s · {record.aspectRatio}
+          </p>
+          {/* Row 3: counts + date */}
+          <div className="flex items-center gap-1 mt-0.5">
+            <CheckCircle size={10} className="text-success flex-shrink-0" />
             <span className="text-[11px] text-success">{doneCount}</span>
             {failCount > 0 && (
               <>
-                <AlertTriangle size={11} className="text-error ml-1" />
+                <AlertTriangle size={10} className="text-error ml-1 flex-shrink-0" />
                 <span className="text-[11px] text-error">{failCount}</span>
               </>
             )}
             <span className="text-[11px] text-text-disabled ml-auto">{fmtDate(record.completedAt)}</span>
           </div>
+        </div>
+
+        {/* Action row — same height as SingleCardGrid's action row */}
+        <div className="flex items-center justify-end gap-1 px-3 pb-2.5" onClick={e => e.stopPropagation()}>
+          {showDeleteConfirm ? (
+            <>
+              <span className="flex-1 text-[11px] text-error truncate">同时删除文件？</span>
+              <button
+                onClick={e => { e.stopPropagation(); setShowDeleteConfirm(false); }}
+                className="px-2 py-1 rounded-md text-[11px] text-text-muted hover:text-text-primary transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-2 py-1 rounded-md text-[11px] bg-error/15 text-error hover:bg-error hover:text-white font-medium transition-colors"
+              >
+                删除
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Placeholder aligns with copy slot in SingleCardGrid */}
+              <span className="invisible p-1.5"><Copy size={12} /></span>
+              {/* Open folder (only when outputs exist) */}
+              {cover ? (
+                <button
+                  onClick={handleOpenFolder}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    folderClicked
+                      ? 'bg-success/20 text-success'
+                      : 'bg-surface-3 hover:bg-surface-2 text-text-muted hover:text-text-primary'
+                  }`}
+                  title="打开文件夹"
+                >
+                  <FolderOpen size={12} />
+                </button>
+              ) : (
+                <span className="invisible p-1.5"><FolderOpen size={12} /></span>
+              )}
+              {/* Delete batch */}
+              <button
+                onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+                className="p-1.5 rounded-lg bg-surface-3 hover:bg-error hover:text-white text-text-muted transition-colors"
+                title="删除批次"
+              >
+                <Trash2 size={12} />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1313,7 +1387,7 @@ export function WorksPanel() {
 
         {/* ── Works section ──────────────────────────────────────────────── */}
         {allWorks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center px-6">
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[16rem] text-center px-6">
             <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mb-4">
               <Film size={32} className="text-text-disabled" />
             </div>
