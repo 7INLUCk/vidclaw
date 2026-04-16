@@ -16,10 +16,17 @@ const MODEL_LABELS: Record<string, string> = {
   'seedance2.0fast': 'Seedance Fast',
   'seedance2.0': 'Seedance 2.0',
 };
-const RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3'];
+const KLING_RATIO_OPTIONS = ['9:16', '16:9', '1:1'];
+const SEEDANCE_RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
 
 function durationOptions(model: string) {
-  return model === 'kling-o1' ? [5, 10] : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  return model === 'kling-o1'
+    ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    : [4, 5, 6, 8, 10, 12, 15];
+}
+
+function ratioOptions(model: string) {
+  return model === 'kling-o1' ? KLING_RATIO_OPTIONS : SEEDANCE_RATIO_OPTIONS;
 }
 
 export function SkillConfirmCard({
@@ -70,7 +77,10 @@ export function SkillConfirmCard({
   function handleModelCycle() {
     const next = cyclePill(model, [...MODEL_OPTIONS]);
     setModel(next);
-    if (next === 'kling-o1' && ![5, 10].includes(duration)) setDuration(5);
+    if (next === 'kling-o1') {
+      if (!durationOptions('kling-o1').includes(duration)) setDuration(5);
+      if (!ratioOptions('kling-o1').includes(aspectRatio)) setAspectRatio('16:9');
+    }
   }
 
   function handleDurationCycle() {
@@ -78,7 +88,7 @@ export function SkillConfirmCard({
   }
 
   function handleRatioCycle() {
-    setAspectRatio(cyclePill(aspectRatio, RATIO_OPTIONS));
+    setAspectRatio(cyclePill(aspectRatio, ratioOptions(model)));
   }
 
   async function handleFillSlot(index: number) {

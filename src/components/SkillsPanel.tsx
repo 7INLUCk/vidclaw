@@ -44,8 +44,12 @@ function SkillEditor({
     { value: 'kling-o1', label: 'Kling O1' },
   ];
 
-  // Kling only supports 5s / 10s; Seedance supports full 4–15s range
-  const DURATION_OPTIONS = model === 'kling-o1' ? [5, 10] : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  const DURATION_OPTIONS = model === 'kling-o1'
+    ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    : [4, 5, 6, 8, 10, 12, 15];
+  const RATIO_OPTIONS = model === 'kling-o1'
+    ? ['9:16', '16:9', '1:1']
+    : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
 
   const updateTaskPrompt = (i: number, prompt: string) => {
     const next = [...tasks];
@@ -72,12 +76,14 @@ function SkillEditor({
   const slotTypeLabel = (t: MaterialSlot['type']) => t === 'image' ? '图片' : t === 'video' ? '视频' : '音频';
   const slotTypeIcon  = (t: MaterialSlot['type']) => t === 'image' ? '🖼️' : t === 'video' ? '🎬' : '🎵';
 
-  // When switching to Kling, clamp to 1 task and valid duration
   function handleModelChange(m: string) {
     setModel(m);
     if (m === 'kling-o1') {
       if (tasks.length > 1) setTasks([tasks[0]]);
-      if (![5, 10].includes(duration)) setDuration(5);
+      const klingDurations = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+      if (!klingDurations.includes(duration)) setDuration(5);
+      const klingRatios = ['9:16', '16:9', '1:1'];
+      if (!klingRatios.includes(aspectRatio)) setAspectRatio('16:9');
     }
   }
 
@@ -142,7 +148,7 @@ function SkillEditor({
                 </button>
               ))}
               <div className="w-px bg-border mx-1" />
-              {['9:16', '16:9', '1:1', '4:3'].map(r => (
+              {RATIO_OPTIONS.map(r => (
                 <button key={r} onClick={() => setAspectRatio(r)}
                   className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${aspectRatio === r ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
                   {r}
