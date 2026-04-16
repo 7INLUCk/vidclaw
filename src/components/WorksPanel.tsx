@@ -662,15 +662,13 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
   onRetry: (id: string) => void;
   highlighted?: boolean;
 }) {
-  const { downloadTask } = useStore();
+  const { downloadTask, settings } = useStore();
   const isFailed = task.status === 'failed';
   const cardRef = useRef<HTMLDivElement>(null);
   const openablePath = getOpenableLocalPath(task.localPath, task.filePath, task.resultUrl);
   const playUrl = task.localPath ? toPlayable(task.localPath) : task.resultUrl ? toPlayable(task.resultUrl) : '';
   const canManualDownload = Boolean(task.submitId || isRemoteHttpUrl(task.resultUrl));
-
-  const [deleteCountdown, setDeleteCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (highlighted) {
@@ -678,119 +676,117 @@ function SingleCardList({ task, onPreview, onDelete, onRetry, highlighted = fals
     }
   }, [highlighted]);
 
-  useEffect(() => {
-    if (deleteCountdown <= 0) return;
-    if (countdownRef.current) return;
-    countdownRef.current = setInterval(() => {
-      setDeleteCountdown(c => {
-        if (c <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          countdownRef.current = null;
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => {
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
-    };
-  }, [deleteCountdown]);
+  const suggestedName = useMemo(() => {
+    const base = (task.prompt || 'video').slice(0, 20).replace(/[^\w\u4e00-\u9fa5]/g, '_');
+    return `${base}_${task.model}_${task.duration}s.mp4`;
+  }, [task.prompt, task.model, task.duration]);
 
-  const handleDeleteClick = useCallback(() => {
-    if (deleteCountdown > 0) {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      countdownRef.current = null;
-      setDeleteCountdown(0);
-      onDelete(task.id);
-    } else {
-      setDeleteCountdown(3);
+  const handleConfirmDelete = useCallback(async () => {
+    if (task.localPath) {
+      await window.api.deleteFile(task.localPath).catch(() => {});
     }
-  }, [deleteCountdown, onDelete, task.id]);
+    onDelete(task.id);
+  }, [task.id, task.localPath, onDelete]);
 
-  const handleDownload = useCallback(() => {
-    if (openablePath) {
-      window.api.openFile(openablePath);
-      return;
-    }
-    if (task.status === 'completed' && canManualDownload) {
+  const handleDownload = useCallback(async () => {
+    if (settings.autoDownload && openablePath) {
+      await window.api.showItemInFolder(openablePath);
+    } else if (!settings.autoDownload && openablePath) {
+      await window.api.saveFileAs({ srcPath: openablePath, suggestedName });
+    } else if (canManualDownload) {
       void downloadTask(task.id);
     }
-  }, [canManualDownload, downloadTask, openablePath, task]);
+  }, [settings.autoDownload, openablePath, suggestedName, canManualDownload, downloadTask, task.id]);
 
   return (
-    <div
-      ref={cardRef}
-      className={`group flex items-center gap-3 bg-surface-1 border rounded-xl p-3
-        active:scale-[0.97] transition-all duration-150 ${
-        highlighted
-          ? 'border-brand shadow-[0_0_0_1px_rgba(54,118,255,0.28)]'
-          : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.16)]'
-      }`}
-    >
-      {/* Thumbnail */}
-      <div className="w-20 h-14 rounded-lg overflow-hidden bg-surface-2 flex-shrink-0 relative">
-        {task.thumbnailUrl
-          ? <img src={toPlayable(task.thumbnailUrl)} alt="" className="w-full h-full object-cover" loading="lazy" />
-          : !isFailed && playUrl
-            ? <video src={playUrl} className="w-full h-full object-cover" muted preload="metadata" />
-            : <div className="w-full h-full flex items-center justify-center">
-                {isFailed ? <AlertTriangle size={16} className="text-error/50" /> : <Film size={16} className="text-text-disabled" />}
-              </div>
-        }
-        {isFailed && <div className="absolute inset-0 bg-error/20" />}
-      </div>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-text-primary line-clamp-1">{task.prompt || '无提示词'}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <span className={`text-[11px] ${STATUS_COLOR[task.status]}`}>{STATUS_LABEL[task.status]}</span>
-          <span className="text-[11px] text-text-disabled">{modelName(task.model)} · {task.duration}s · {fmtDate(task.createdAt)}</span>
-        </div>
-        {isFailed && (
-          <p className={`text-[10px] mt-0.5 ${CATEGORY_COLORS[parseTaskError(task.error, task.model === 'kling-o1' ? 'kling' : 'seedance').category].text}`}>
-            {parseTaskError(task.error, task.model === 'kling-o1' ? 'kling' : 'seedance').title}
-            {task.error ? ` — ${task.error.slice(0, 50)}${task.error.length > 50 ? '…' : ''}` : ''}
-          </p>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">
-        {!isFailed && playUrl && (
-          <button onClick={() => onPreview(playUrl)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
-            <Play size={12} />
-          </button>
-        )}
-        {!isFailed && (openablePath || canManualDownload) && (
-          <button onClick={handleDownload} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
-            <Download size={12} />
-          </button>
-        )}
-        {isFailed && (
-          <button onClick={() => onRetry(task.id)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
-            <RefreshCw size={12} />
-          </button>
-        )}
-        {/* Delete — two-step confirm */}
-        <button
-          onClick={handleDeleteClick}
-          className={`p-1.5 rounded-lg transition-colors ${
-            deleteCountdown > 0
-              ? 'bg-error/70 text-white'
-              : 'bg-surface-3 hover:bg-error hover:text-white text-text-muted'
-          }`}
-          title={deleteCountdown > 0 ? `再次点击确认 (${deleteCountdown}s)` : '删除'}
-        >
-          {deleteCountdown > 0
-            ? <span className="text-[11px] font-mono w-3 text-center block">{deleteCountdown}</span>
-            : <Trash2 size={12} />
+    <div ref={cardRef}>
+      <div
+        className={`group flex items-center gap-3 bg-surface-1 border p-3
+          active:scale-[0.97] transition-all duration-150 ${
+          showDeleteConfirm ? 'rounded-t-xl border-b-0' : 'rounded-xl'
+        } ${
+          highlighted
+            ? 'border-brand shadow-[0_0_0_1px_rgba(54,118,255,0.28)]'
+            : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.16)]'
+        }`}
+      >
+        {/* Thumbnail */}
+        <div className="w-20 h-14 rounded-lg overflow-hidden bg-surface-2 flex-shrink-0 relative">
+          {task.thumbnailUrl
+            ? <img src={toPlayable(task.thumbnailUrl)} alt="" className="w-full h-full object-cover" loading="lazy" />
+            : !isFailed && playUrl
+              ? <video src={playUrl} className="w-full h-full object-cover" muted preload="metadata" />
+              : <div className="w-full h-full flex items-center justify-center">
+                  {isFailed ? <AlertTriangle size={16} className="text-error/50" /> : <Film size={16} className="text-text-disabled" />}
+                </div>
           }
-        </button>
+          {isFailed && <div className="absolute inset-0 bg-error/20" />}
+        </div>
+
+        {/* Text */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-text-primary line-clamp-1">{task.prompt || '无提示词'}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-[11px] ${STATUS_COLOR[task.status]}`}>{STATUS_LABEL[task.status]}</span>
+            <span className="text-[11px] text-text-disabled">{modelName(task.model)} · {task.duration}s · {fmtDate(task.createdAt)}</span>
+          </div>
+          {isFailed && (
+            <p className={`text-[10px] mt-0.5 ${CATEGORY_COLORS[parseTaskError(task.error, task.model === 'kling-o1' ? 'kling' : 'seedance').category].text}`}>
+              {parseTaskError(task.error, task.model === 'kling-o1' ? 'kling' : 'seedance').title}
+              {task.error ? ` — ${task.error.slice(0, 50)}${task.error.length > 50 ? '…' : ''}` : ''}
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">
+          {!isFailed && playUrl && (
+            <button onClick={() => onPreview(playUrl)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
+              <Play size={12} />
+            </button>
+          )}
+          {!isFailed && (openablePath || canManualDownload) && (
+            <button onClick={handleDownload} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors"
+              title={settings.autoDownload && openablePath ? '在文件夹中显示' : '下载'}>
+              {settings.autoDownload && openablePath ? <FolderOpen size={12} /> : <Download size={12} />}
+            </button>
+          )}
+          {isFailed && (
+            <button onClick={() => onRetry(task.id)} className="p-1.5 rounded-lg bg-surface-3 hover:bg-brand hover:text-white text-text-muted transition-colors">
+              <RefreshCw size={12} />
+            </button>
+          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-1.5 rounded-lg bg-surface-3 hover:bg-error hover:text-white text-text-muted transition-colors"
+            title="删除"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="flex items-center justify-between px-3 py-2 bg-error/10 border border-t-0 border-error/20 rounded-b-xl">
+          <span className="text-[11px] text-error">
+            {task.localPath ? '同时删除本地文件？' : '删除任务记录？'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              className="text-[11px] text-error hover:text-error/80 font-medium transition-colors"
+            >
+              删除
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
