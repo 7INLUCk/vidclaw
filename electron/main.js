@@ -1210,6 +1210,38 @@ function registerIpcHandlers() {
     }
   });
 
+  // ---- 在 Finder / 文件管理器中高亮选中文件 ----
+  ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
+    const { shell } = require('electron');
+    if (fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+      return { success: true };
+    }
+    return { success: false, error: '文件不存在' };
+  });
+
+  // ---- 另存为：弹出保存对话框 + 复制文件 ----
+  ipcMain.handle('file:save-as', async (_event, { srcPath, suggestedName }) => {
+    const { dialog } = require('electron');
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: suggestedName,
+      filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'webm'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false };
+    await fs.promises.copyFile(srcPath, result.filePath);
+    return { success: true, filePath: result.filePath };
+  });
+
+  // ---- 删除本地文件（失败静默）----
+  ipcMain.handle('file:delete', async (_event, filePath) => {
+    try {
+      if (fs.existsSync(filePath)) await fs.promises.unlink(filePath);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
   // ---- 任务完成通知 ----
   ipcMain.handle('task:notify', async (_event, task) => {
     sendTaskNotification(task);

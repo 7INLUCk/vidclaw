@@ -67,6 +67,9 @@ declare global {
       getFileStat: (filePath: string) => Promise<{ size: number }>;
       openDownloadDir: () => Promise<{ success: boolean; error?: string }>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      saveFileAs: (args: { srcPath: string; suggestedName: string }) => Promise<{ success: boolean; filePath?: string }>;
+      deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
 
       // 设置
       getSettings: () => Promise<any>;
