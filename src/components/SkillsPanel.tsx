@@ -46,7 +46,7 @@ function SkillEditor({
 
   const DURATION_OPTIONS = model === 'kling-o1'
     ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    : [4, 5, 6, 8, 10, 12, 15];
+    : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   const RATIO_OPTIONS = model === 'kling-o1'
     ? ['9:16', '16:9', '1:1']
     : ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
@@ -131,29 +131,43 @@ function SkillEditor({
           </div>
 
           {/* Params */}
-          <div>
-            <label className="text-[10px] text-text-muted uppercase tracking-wider block mb-2">默认参数</label>
-            <div className="flex gap-2 flex-wrap">
-              {MODEL_OPTIONS.map(m => (
-                <button key={m.value} onClick={() => handleModelChange(m.value)}
-                  className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${model === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
-                  {m.label}
-                </button>
-              ))}
-              <div className="w-px bg-border mx-1" />
-              {DURATION_OPTIONS.map(d => (
-                <button key={d} onClick={() => setDuration(d)}
-                  className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${duration === d ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
-                  {d}s
-                </button>
-              ))}
-              <div className="w-px bg-border mx-1" />
-              {RATIO_OPTIONS.map(r => (
-                <button key={r} onClick={() => setAspectRatio(r)}
-                  className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${aspectRatio === r ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
-                  {r}
-                </button>
-              ))}
+          <div className="space-y-3">
+            <label className="text-[10px] text-text-muted uppercase tracking-wider block">默认参数</label>
+            {/* Model */}
+            <div>
+              <p className="text-[9px] text-text-disabled uppercase tracking-wider mb-1.5">模型</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {MODEL_OPTIONS.map(m => (
+                  <button key={m.value} onClick={() => handleModelChange(m.value)}
+                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${model === m.value ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Duration */}
+            <div>
+              <p className="text-[9px] text-text-disabled uppercase tracking-wider mb-1.5">时长</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {DURATION_OPTIONS.map(d => (
+                  <button key={d} onClick={() => setDuration(d)}
+                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${duration === d ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                    {d}s
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Ratio */}
+            <div>
+              <p className="text-[9px] text-text-disabled uppercase tracking-wider mb-1.5">比例</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {RATIO_OPTIONS.map(r => (
+                  <button key={r} onClick={() => setAspectRatio(r)}
+                    className={`px-3 py-1.5 text-[11px] rounded-md transition-all ${aspectRatio === r ? 'bg-brand text-white' : 'bg-surface-2 text-text-secondary hover:bg-border'}`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

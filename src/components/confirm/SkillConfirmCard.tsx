@@ -22,7 +22,7 @@ const SEEDANCE_RATIO_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'];
 function durationOptions(model: string) {
   return model === 'kling-o1'
     ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    : [4, 5, 6, 8, 10, 12, 15];
+    : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 }
 
 function ratioOptions(model: string) {
