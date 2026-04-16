@@ -134,7 +134,6 @@ export function SettingsPanel() {
             <h3 className="text-sm font-medium text-text-primary mb-2">关于</h3>
             <div className="text-xs text-text-muted space-y-1.5">
               <p className="font-mono">VidClaw <span className="text-text-disabled">v0.1.1</span></p>
-              <p>技术栈：Electron + 即梦 CLI + DeepSeek</p>
             </div>
           </section>
 
