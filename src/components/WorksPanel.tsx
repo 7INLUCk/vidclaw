@@ -875,37 +875,50 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
           transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.97]"
         style={{ zIndex: 2 }}
       >
-        {/* A: 2×2 thumbnail grid (or single / empty fallback) */}
+        {/* Adaptive thumbnail grid: 0=icon, 1=full, 2=side-by-side, 3=Instagram, 4=2×2 */}
         <div className="aspect-square bg-surface-2 relative overflow-hidden">
-          {coverTasks.length >= 2 ? (
-            // 2×2 grid — show up to 4 clips
-            <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-[2px]">
-              {Array.from({ length: 4 }).map((_, i) => {
-                const t = coverTasks[i];
-                return t ? (
-                  <div key={i} className="relative overflow-hidden bg-surface-3">
-                    <video
-                      src={toPlayable(t.outputFile!)}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      muted
-                    />
-                  </div>
-                ) : (
-                  <div key={i} className="bg-surface-3/50" />
-                );
-              })}
+          {coverTasks.length === 0 ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+              <Layers size={28} className="text-text-disabled" />
             </div>
           ) : coverTasks.length === 1 ? (
-            // Single output: full-size video
             <video
               src={toPlayable(coverTasks[0].outputFile!)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               muted
             />
+          ) : coverTasks.length === 2 ? (
+            // 2×1: two columns
+            <div className="w-full h-full grid grid-cols-2 gap-[2px]">
+              {coverTasks.map((t, i) => (
+                <div key={i} className="relative overflow-hidden bg-surface-3">
+                  <video src={toPlayable(t.outputFile!)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                </div>
+              ))}
+            </div>
+          ) : coverTasks.length === 3 ? (
+            // Instagram 3: left=tall, right=2 stacked
+            <div className="w-full h-full flex gap-[2px]">
+              <div className="flex-1 relative overflow-hidden bg-surface-3">
+                <video src={toPlayable(coverTasks[0].outputFile!)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+              </div>
+              <div className="flex-1 flex flex-col gap-[2px]">
+                <div className="flex-1 relative overflow-hidden bg-surface-3">
+                  <video src={toPlayable(coverTasks[1].outputFile!)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                </div>
+                <div className="flex-1 relative overflow-hidden bg-surface-3">
+                  <video src={toPlayable(coverTasks[2].outputFile!)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                </div>
+              </div>
+            </div>
           ) : (
-            // No output yet: placeholder icon
-            <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-              <Layers size={28} className="text-text-disabled" />
+            // 4: 2×2 grid
+            <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-[2px]">
+              {coverTasks.map((t, i) => (
+                <div key={i} className="relative overflow-hidden bg-surface-3">
+                  <video src={toPlayable(t.outputFile!)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                </div>
+              ))}
             </div>
           )}
 
