@@ -134,13 +134,13 @@ export function SettingsPanel() {
             </div>
             <button
               onClick={() => setSettings({ autoDownload: !settings.autoDownload })}
-              className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 ${
+              className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 overflow-hidden outline-none focus:outline-none ${
                 settings.autoDownload ? 'bg-brand' : 'bg-surface-3'
               }`}
             >
               <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${
-                  settings.autoDownload ? 'translate-x-5' : 'translate-x-0.5'
+                className={`absolute top-0.5 left-0 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${
+                  settings.autoDownload ? 'translate-x-[22px]' : 'translate-x-0.5'
                 }`}
               />
             </button>
