@@ -850,9 +850,9 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
   }, [record.tasks, record.id, removeBatchHistory]);
 
   return (
-    // Outer wrapper with bottom/right padding to show stacked layers
+    // Outer wrapper — no padding needed; layers overflow into gap naturally
     <div
-      className="relative pb-2 pr-2 cursor-pointer group"
+      className="relative cursor-pointer group"
       onClick={onClick}
     >
       {/* Layer 3 — back */}
