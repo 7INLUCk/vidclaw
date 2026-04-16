@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal, Paperclip, FolderOpen } from 'lucide-react';
+import { Send, Upload, X, Download, Loader2, CheckCircle, RefreshCw, Settings2, Layers, FileStack, Sparkles, Globe, Type, Video, ChevronDown, ChevronUp, AlertTriangle, ArrowUp, Play, XCircle, Plus, Zap, Clock, RectangleHorizontal, Paperclip, FolderOpen, Wand2, PenLine, Cpu } from 'lucide-react';
 import { useStore, type Message, type GuidedStep, type TaskMaterial, type TaskMode, type SendMode, type BatchTaskItem, type Skill } from '../store';
 import { MaterialLibrary } from './MaterialLibrary';
 import { localFileUrl, localFileUrlSync, isVideoFile, isAudioFile, isImageFile, getFileType } from '../utils/localFile';
@@ -2722,7 +2722,7 @@ export function ChatPanel() {
             {activeSkill && canInput && (
               <div className="flex items-center gap-2 px-3 pt-2.5 pb-0">
                 <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-brand/10 border border-brand/20 rounded-md">
-                  <span className="text-brand text-xs">⚡</span>
+                  <Wand2 size={11} className="text-brand flex-shrink-0" />
                   <span className="text-xs text-brand font-medium flex-1 truncate">{activeSkill.name}</span>
                   <span className="text-[10px] text-text-muted">{activeSkill.tasks.length > 1 ? `批量 · ${activeSkill.tasks.length} 条` : '单个'} · {activeSkill.model === 'seedance2.0fast' ? 'Fast' : '2.0'} · {activeSkill.duration}s · {activeSkill.aspectRatio}</span>
                   <button onClick={() => setActiveSkill(null)} className="text-text-muted hover:text-error transition-colors ml-1"><X size={12} /></button>
@@ -2778,7 +2778,7 @@ export function ChatPanel() {
             {/* Bottom toolbar */}
             <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border-subtle">
               <PillSelect
-                icon={sendMode === 'ai-single' ? <Sparkles size={10} /> : sendMode === 'ai-batch' ? <Layers size={10} /> : <Zap size={10} />}
+                icon={sendMode === 'ai-single' ? <Sparkles size={10} /> : sendMode === 'ai-batch' ? <Layers size={10} /> : <PenLine size={10} />}
                 label={sendMode === 'ai-single' ? '智能生成' : sendMode === 'ai-batch' ? '批量规划' : '专业模式'}
                 options={[
                   { value: 'ai-single', label: '✨ 智能生成', desc: '描述想法，AI 帮你优化成提示词' },
@@ -2790,7 +2790,7 @@ export function ChatPanel() {
                 disabled={!canInput}
               />
               <PillSelect
-                icon={<Zap size={10} />}
+                icon={<Cpu size={10} />}
                 label={selectedModel === 'kling-o1' ? '可灵 O1' : selectedModel === 'seedance2.0fast' ? 'Seedance 2.0 Fast' : 'Seedance 2.0'}
                 options={[
                   { value: 'seedance2.0fast', label: 'Seedance 2.0 Fast', desc: '即梦 · 最快速度' },
@@ -2832,14 +2832,14 @@ export function ChatPanel() {
 
               <div className="flex-1" />
 
-              {/* ⚡ Skill button */}
+              {/* Skill button */}
               <button
                 onClick={() => setShowSkillPicker(true)}
                 disabled={!canInput}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all disabled:opacity-30 ${activeSkill ? 'text-brand bg-brand/10 hover:bg-brand/20' : 'text-text-muted hover:text-brand hover:bg-brand/10'}`}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all disabled:opacity-30 ${activeSkill ? 'text-brand bg-brand/10 hover:bg-brand/20' : 'text-text-muted hover:text-brand hover:bg-brand/10'}`}
                 title="应用技能"
               >
-                <span>⚡</span>
+                <Wand2 size={12} />
                 <span className="hidden sm:inline">技能</span>
               </button>
 
@@ -2873,7 +2873,7 @@ export function ChatPanel() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-brand">⚡</span>
+              <Wand2 size={13} className="text-brand" />
               <h3 className="text-sm font-semibold text-text-primary">
                 保存为技能
               </h3>
@@ -2922,7 +2922,7 @@ function SkillPickerModal({ onSelect, onClose }: { onSelect: (skill: Skill) => v
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <span className="text-brand">⚡</span>
+            <Wand2 size={13} className="text-brand" />
             <h3 className="text-sm font-semibold text-text-primary">选择技能</h3>
           </div>
           <button onClick={() => { onClose(); setActivePanel('skills'); }}
@@ -2950,7 +2950,7 @@ function SkillPickerModal({ onSelect, onClose }: { onSelect: (skill: Skill) => v
                 className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-surface-2 transition-all text-left group"
               >
                 <div className="w-7 h-7 rounded-lg bg-brand/10 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-brand/20 transition-colors">
-                  <span className="text-brand text-xs">⚡</span>
+                  <Wand2 size={12} className="text-brand" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary truncate">{skill.name}</p>

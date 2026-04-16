@@ -1,4 +1,4 @@
-import { MessageSquare, Film, Settings, PawPrint, Zap, Wallet } from 'lucide-react';
+import { MessageSquare, Film, Settings, PawPrint, Wand2, Wallet } from 'lucide-react';
 import { useStore } from '../store';
 
 export function Sidebar() {
@@ -11,7 +11,7 @@ export function Sidebar() {
   const navItems = [
     { id: 'chat' as const, icon: MessageSquare, label: '对话', badge: isSubmitting ? '...' : null },
     { id: 'works' as const, icon: Film, label: '作品', badge: activeTaskCount > 0 ? String(activeTaskCount) : null },
-    { id: 'skills' as const, icon: Zap, label: '技能', badge: skills.length > 0 ? String(skills.length) : null },
+    { id: 'skills' as const, icon: Wand2, label: '技能', badge: skills.length > 0 ? String(skills.length) : null },
     { id: 'settings' as const, icon: Settings, label: '设置', badge: null },
   ];
 
