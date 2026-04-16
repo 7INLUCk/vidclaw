@@ -1213,9 +1213,16 @@ function registerIpcHandlers() {
   // ---- 在 Finder / 文件管理器中高亮选中文件 ----
   ipcMain.handle('file:show-in-folder', async (_event, filePath) => {
     const { shell } = require('electron');
+    console.log('[show-in-folder] path:', filePath, 'exists:', fs.existsSync(filePath));
     if (fs.existsSync(filePath)) {
       shell.showItemInFolder(filePath);
       return { success: true };
+    }
+    // File might have been moved — try opening the parent directory
+    const dir = path.dirname(filePath);
+    if (fs.existsSync(dir)) {
+      shell.openPath(dir);
+      return { success: true, fallback: 'dir' };
     }
     return { success: false, error: '文件不存在' };
   });
