@@ -926,15 +926,16 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
             </div>
           )}
 
-          {/* Top-left badges — mode label + completion status */}
+          {/* Top-left badges: mode | info | status? */}
           <div className="absolute top-2 left-2 flex gap-1">
-            {/* Mode label */}
+            {/* pill 1: mode */}
             <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/60">批量</span>
-            {/* Completion count */}
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">
-              <span className="text-success">✓</span>{doneCount}
-              {failCount > 0 && <><span className="text-error ml-1">✗</span>{failCount}</>}
-            </span>
+            {/* pill 2: done count — neutral dark, same style as single's duration pill */}
+            <span className="px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white/80">✓{doneCount}</span>
+            {/* pill 3: failure count — colored solid bg, only when failures exist */}
+            {failCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-error/80 text-[10px] text-white">{failCount} 失败</span>
+            )}
           </div>
 
           {/* Hover overlay */}
