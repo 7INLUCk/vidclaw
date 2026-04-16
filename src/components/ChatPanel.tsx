@@ -3394,7 +3394,7 @@ export function ChatPanel() {
                   !canInput ? '请先完成当前步骤...' :
                   activeSkill ? `上传素材后直接发送，使用「${activeSkill.name}」技能生成...` :
                   sendMode === 'ai-batch' ? '描述这次要批量生成什么，比如：5 个不同风格的产品展示视频…' :
-                  sendMode === 'direct' ? '直接输入 Seedance 提示词，按工具栏参数执行…' :
+                  sendMode === 'direct' ? (selectedModel === 'kling-o1' ? '直接输入可灵提示词，按工具栏参数执行…' : '直接输入 Seedance 提示词，按工具栏参数执行…') :
                   '描述你想生成的视频效果，比如：黄昏海边的慢镜头，温暖色调…'
                 }
                 rows={3}
