@@ -170,7 +170,11 @@ export function SkillConfirmCard({
             <div>
               <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">素材槽位</p>
               <div className="flex flex-wrap items-end gap-3">
-                {slots.map((slot, i) => (
+                {slots.map((slot, i) => {
+                  const typeLabel = slot.type === 'image' ? '图片' : slot.type === 'video' ? '视频' : '音频';
+                  const rank = slots.slice(0, i).filter(s => s.type === slot.type).length + 1;
+                  const numberedLabel = `${typeLabel}${rank}`;
+                  return (
                   <div key={i} className="flex flex-col items-center gap-1">
                     <button
                       onClick={() => handleFillSlot(i)}
@@ -189,15 +193,17 @@ export function SkillConfirmCard({
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 bg-surface-3">
                           <Plus size={14} className="text-text-muted" />
-                          <span className="text-[8px] text-text-muted">{slot.type === 'image' ? '图片' : slot.type === 'video' ? '视频' : '音频'}</span>
+                          <span className="text-[8px] text-text-muted">{numberedLabel}</span>
                         </div>
                       )}
                       {changedSlots.has(i) && (
                         <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-warning" />
                       )}
                     </button>
+                    <span className="text-[9px] text-text-muted">{numberedLabel}</span>
                   </div>
-                ))}
+                  );
+                })}
                 {extraFiles.map((f, i) => {
                   const fileType = getFileType(f);
                   return (

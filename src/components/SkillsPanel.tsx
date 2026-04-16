@@ -75,6 +75,12 @@ function SkillEditor({
 
   const slotTypeLabel = (t: MaterialSlot['type']) => t === 'image' ? '图片' : t === 'video' ? '视频' : '音频';
   const slotTypeIcon  = (t: MaterialSlot['type']) => t === 'image' ? '🖼️' : t === 'video' ? '🎬' : '🎵';
+  // Returns numbered label e.g. "图片1", "图片2", "视频1"
+  function slotLabel(slots: MaterialSlot[], index: number) {
+    const type = slots[index].type;
+    const rank = slots.slice(0, index).filter(s => s.type === type).length + 1;
+    return `${slotTypeLabel(type)}${rank}`;
+  }
 
   function handleModelChange(m: string) {
     setModel(m);
@@ -208,9 +214,9 @@ function SkillEditor({
                         )}
                       </button>
                     ) : (
-                      <span className="text-sm flex-shrink-0">{slotTypeIcon(slot.type)}</span>
+                      <span className="text-[10px] text-text-disabled shrink-0 font-mono">{slotLabel(slots, i)}</span>
                     )}
-                    <span className="text-[11px] text-text-secondary w-8 shrink-0">{slotTypeLabel(slot.type)}</span>
+                    <span className="text-[11px] text-text-secondary shrink-0 min-w-[3rem]">{slotLabel(slots, i)}</span>
                     <button onClick={() => pickSlotFile(i)}
                       className="flex-1 text-left text-[11px] text-text-muted hover:text-brand transition-colors truncate">
                       {slot.path ? slot.path.split('/').pop() : '点击选择文件（可选）'}
