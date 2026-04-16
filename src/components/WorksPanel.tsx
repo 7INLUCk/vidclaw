@@ -571,9 +571,9 @@ function SingleCardGrid({ task, onPreview, onDelete, onRetry, highlighted = fals
         <p className="text-[12px] text-text-secondary line-clamp-2 leading-snug min-h-[2.0625rem]">
           {task.prompt || '无提示词'}
         </p>
-        {/* Row 2: model · duration */}
+        {/* Row 2: model · duration · ratio */}
         <p className="text-[11px] text-text-muted mt-1">
-          {modelName(task.model)} · {task.duration}s
+          {modelName(task.model)} · {task.duration}s{task.aspectRatio ? ` · ${task.aspectRatio}` : ''}
         </p>
         {/* Row 3: date (success) or error title (failed) — same line, same height */}
         <p className="text-[11px] mt-0.5 truncate">
@@ -952,8 +952,8 @@ function BatchCardGrid({ record, onClick }: { record: BatchHistoryRecord; onClic
           <p className="text-[11px] text-text-disabled mt-0.5">{fmtDate(record.completedAt)}</p>
         </div>
 
-        {/* Action row — same height as SingleCardGrid's action row */}
-        <div className="flex items-center justify-end gap-1 px-3 pb-2.5" onClick={e => e.stopPropagation()}>
+        {/* Action row — same layout as SingleCardGrid (no justify-end) */}
+        <div className="flex items-center gap-1 px-3 pb-2.5" onClick={e => e.stopPropagation()}>
           {showDeleteConfirm ? (
             <>
               <span className="flex-1 text-[11px] text-error truncate">同时删除文件？</span>
